@@ -5,7 +5,7 @@ import SwiftData
 struct SprintApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
         }
         .modelContainer(for: [Subject.self, StudyTask.self, FocusSession.self])
     }

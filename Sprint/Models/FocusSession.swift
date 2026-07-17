@@ -39,6 +39,9 @@ final class FocusSession {
     var failureReason: String?
     var rating: String?
     var notes: String
+    /// Only set for `.focusFlight` sessions.
+    var departureName: String?
+    var arrivalName: String?
 
     var subject: Subject?
 

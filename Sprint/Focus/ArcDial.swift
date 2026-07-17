@@ -20,9 +20,9 @@ struct ArcDial: View {
             let radius = min(geo.size.width / 2 - 24, geo.size.height - 20)
 
             ZStack {
-                arc(to: 0.5, color: Color.theme.sand.opacity(0.25), center: center, radius: radius)
-                arc(to: 0.5 * fraction, color: Color.theme.marigold, center: center, radius: radius)
-                    .shadow(color: Color.theme.marigold.opacity(0.55), radius: 12)
+                arc(to: 0.5, color: Color.theme.beige.opacity(0.25), center: center, radius: radius)
+                arc(to: 0.5 * fraction, color: Color.theme.teal, center: center, radius: radius)
+                    .shadow(color: Color.theme.teal.opacity(0.55), radius: 12)
 
                 knob(center: center, radius: radius)
             }
@@ -50,7 +50,7 @@ struct ArcDial: View {
         let x = center.x + radius * cos(angle)
         let y = center.y - radius * sin(angle)
         return Circle()
-            .fill(Color.theme.paper)
+            .fill(Color.theme.white)
             .frame(width: 28, height: 28)
             .shadow(radius: 4)
             .position(x: x, y: y)

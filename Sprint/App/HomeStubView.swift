@@ -6,20 +6,20 @@ import SwiftUI
 struct HomeStubView: View {
     var body: some View {
         ZStack {
-            Color.theme.paper.ignoresSafeArea()
+            Color.theme.skyBlue.ignoresSafeArea()
 
             VStack(spacing: 16) {
                 Image(systemName: "rotate.right")
                     .font(.system(size: 44, weight: .bold))
-                    .foregroundStyle(Color.theme.marigold)
+                    .foregroundStyle(Color.theme.teal)
 
                 Text("Rotate to Focus")
                     .font(.theme.header(24))
-                    .foregroundStyle(Color.theme.ink)
+                    .foregroundStyle(Color.theme.navy)
 
-                Text("Turn your phone horizontal to set up a locked-in Pomodoro session.")
+                Text("Turn your phone horizontal to set up a locked-in Pomodoro or FocusFlight session.")
                     .font(.theme.body(15))
-                    .foregroundStyle(Color.theme.sand)
+                    .foregroundStyle(Color.theme.navy.opacity(0.6))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
             }

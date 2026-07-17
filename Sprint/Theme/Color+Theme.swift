@@ -4,16 +4,16 @@ extension Color {
     /// Sprint's fixed brand palette. Every screen in the app must be built from these five
     /// colors — no default Apple system colors (`.blue`, `.gray`, etc).
     struct Theme {
-        /// F0F1EB — master app background.
-        let paper = Color(hex: 0xF0F1EB)
-        /// 121212 — primary text, titles, dark surfaces (tab bar, focus screens).
-        let ink = Color(hex: 0x121212)
-        /// 3C4E34 — completed states, success haptics, checked-off tasks.
-        let moss = Color(hex: 0x3C4E34)
-        /// E9A02F — active timers, warnings, the priority "Frog" task.
-        let marigold = Color(hex: 0xE9A02F)
-        /// B1B38E — metadata, secondary text, time estimates, disabled states.
-        let sand = Color(hex: 0xB1B38E)
+        /// C8D9E6 — master app background.
+        let skyBlue = Color(hex: 0xC8D9E6)
+        /// 2F4156 — primary text, heavy emphasis, dark surfaces (focus screens).
+        let navy = Color(hex: 0x2F4156)
+        /// 567C8D — active elements, accents, success states.
+        let teal = Color(hex: 0x567C8D)
+        /// F5EFEB — secondary surfaces, inactive tracks, metadata.
+        let beige = Color(hex: 0xF5EFEB)
+        /// FFFFFF — floating components, text on dark backgrounds.
+        let white = Color(hex: 0xFFFFFF)
     }
 
     static let theme = Theme()

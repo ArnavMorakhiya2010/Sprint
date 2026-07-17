@@ -6,7 +6,7 @@ enum HapticsManager {
         UISelectionFeedbackGenerator().selectionChanged()
     }
 
-    /// Fired once per second during the 5-second face-down grace period.
+    /// Fired once per second during the 5-second grace period before a session locks in.
     static func countdownTick() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
@@ -24,7 +24,23 @@ enum HapticsManager {
         UINotificationFeedbackGenerator().notificationOccurred(.error)
     }
 
+    /// A strong, celebratory sequence for finishing a full session: the system success
+    /// chime immediately, followed by two heavy impact pulses landing just after it.
     static func success() {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
+        let impact = UIImpactFeedbackGenerator(style: .heavy)
+        impact.prepare()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { impact.impactOccurred() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) { impact.impactOccurred(intensity: 0.8) }
+    }
+
+    /// Crisp double-tap used to punctuate beats of the splash screen's launch animation.
+    static func launchTick() {
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+    }
+
+    /// The final settle beat once the splash animation finishes.
+    static func launchSettle() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.7)
     }
 }

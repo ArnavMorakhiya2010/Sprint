@@ -1,29 +1,48 @@
 import Foundation
 import SwiftData
+import SwiftUI
 import Combine
 
 enum FocusPhase: Equatable {
-    /// Arc dial is live; user is dragging to set the duration.
+    /// Arc dial is live; user is dragging to set the duration (and, for FocusFlight,
+    /// picking a departure/arrival).
     case configuring
-    /// Start was tapped. `secondsLeft` counts down from 5 — the phone must go face down
-    /// before this hits zero or the session forfeits before it even begins.
+    /// Pomodoro only. Start was tapped. `secondsLeft` counts down from 5 — the phone
+    /// must be leaning, in landscape, before this hits zero or the session forfeits
+    /// before it even begins. FocusFlight skips this phase entirely.
     case armed(secondsLeft: Int)
-    /// Face down and counting down for real.
+    /// Counting down for real — leaning and monitored (Pomodoro) or in the foreground
+    /// (FocusFlight).
     case running(secondsLeft: Int)
-    /// Picked up (or never placed down in time). Logged as a failure, no break earned.
+    /// Picked up, leveled out, or backgrounded early. Logged as a failure, no break earned.
     case forfeited
-    /// Ran the full duration face down without interruption.
-    case completed
+    /// Ran the full duration. Rate the session and leave notes before cooldown starts.
+    case audit
+    /// The mandatory 5-minute lockout after a completed session. Starting is disabled.
+    case cooldown(secondsLeft: Int)
 }
 
-/// Owns the Landscape Pomodoro state machine end to end: arc-drag configuration, the
-/// 5-second face-down grace period, the running countdown with its 10-minute haptic
-/// anchor, and the CoreMotion-driven forfeit rule. Every session — success or failure —
-/// is written to SwiftData the moment it starts, then finalized on exit.
+/// Owns the Focus Engine state machine end to end for both modes:
+/// - **Pomodoro**: arc-drag configuring -> 5s armed grace period -> running (CoreMotion
+///   leaning check) -> forfeited/audit.
+/// - **FocusFlight**: arc-drag configuring -> running (scenePhase foreground check) ->
+///   forfeited/audit.
+/// A successful run always continues through audit -> a 5-minute cooldown before the
+/// engine resets. Every session — success or failure — is written to SwiftData the
+/// moment it starts.
 @MainActor
 final class FocusEngine: ObservableObject {
     @Published private(set) var phase: FocusPhase = .configuring
     @Published private(set) var plannedMinutes: Int = 25
+    @Published private(set) var activeMode: SessionMode = .pomodoro
+    @Published private(set) var lastFailureReason = ""
+
+    @Published var selectedMode: SessionMode = .pomodoro
+    @Published var departure: Destination?
+    @Published var arrival: Destination?
+
+    @Published var draftRating: FocusRating?
+    @Published var draftNotes: String = ""
 
     let minMinutes = 5
     let maxMinutes = 120
@@ -31,10 +50,12 @@ final class FocusEngine: ObservableObject {
     private let motionManager = MotionManager()
     private var armTimer: Timer?
     private var runTimer: Timer?
+    private var cooldownTimer: Timer?
     private var secondsSinceLastAnchor = 0
 
     private let armGraceSeconds = 5
     private let anchorIntervalSeconds = 600
+    private let cooldownSeconds = 300
 
     private var modelContext: ModelContext?
     private var activeSubject: Subject?
@@ -55,26 +76,58 @@ final class FocusEngine: ObservableObject {
         HapticsManager.arcTick()
     }
 
-    func start() {
-        guard case .configuring = phase, let modelContext else { return }
+    var canStart: Bool {
+        guard selectedMode == .focusFlight else { return true }
+        guard let departure, let arrival else { return false }
+        return departure.id != arrival.id
+    }
 
-        let session = FocusSession(
-            mode: .pomodoro,
-            plannedDurationSeconds: plannedMinutes * 60,
-            subject: activeSubject
-        )
+    func start() {
+        guard case .configuring = phase, canStart, let modelContext else { return }
+
+        let session = FocusSession(mode: selectedMode, plannedDurationSeconds: plannedMinutes * 60, subject: activeSubject)
+        if selectedMode == .focusFlight {
+            session.departureName = departure?.name
+            session.arrivalName = arrival?.name
+        }
         modelContext.insert(session)
         activeSession = session
 
-        motionManager.startMonitoring()
-        beginArmingCountdown()
+        switch selectedMode {
+        case .pomodoro:
+            motionManager.startMonitoring()
+            beginArmingCountdown()
+        case .focusFlight:
+            beginFlight()
+        }
+    }
+
+    /// Called from the view's `.onChange(of: scenePhase)`. Only FocusFlight sessions care —
+    /// leaving the app mid-flight is the crash condition in place of Screen Time blocking.
+    func handleScenePhaseChange(_ newPhase: ScenePhase) {
+        guard activeMode == .focusFlight, newPhase != .active else { return }
+        guard case .running = phase else { return }
+        forfeit(reason: "The app was backgrounded mid-flight. The flight crashed.")
+    }
+
+    func submitAudit() {
+        guard case .audit = phase else { return }
+        activeSession?.ratingValue = draftRating
+        activeSession?.notes = draftNotes
+        try? modelContext?.save()
+        draftRating = nil
+        draftNotes = ""
+        beginCooldown()
     }
 
     func reset() {
         armTimer?.invalidate()
         runTimer?.invalidate()
+        cooldownTimer?.invalidate()
         motionManager.stopMonitoring()
         activeSession = nil
+        draftRating = nil
+        draftNotes = ""
         plannedMinutes = 25
         phase = .configuring
     }
@@ -88,7 +141,7 @@ final class FocusEngine: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
 
-                if self.motionManager.facing == .faceDown {
+                if self.motionManager.isLeaning {
                     timer.invalidate()
                     self.beginRunning()
                     return
@@ -97,7 +150,7 @@ final class FocusEngine: ObservableObject {
                 secondsLeft -= 1
                 if secondsLeft <= 0 {
                     timer.invalidate()
-                    self.forfeit(reason: "Phone was never placed face down within 5 seconds.")
+                    self.forfeit(reason: "Phone was never propped up leaning within 5 seconds.")
                     return
                 }
 
@@ -108,6 +161,18 @@ final class FocusEngine: ObservableObject {
     }
 
     private func beginRunning() {
+        activeMode = .pomodoro
+        runCountdown { [weak self] in self?.motionManager.isLeaning ?? false }
+    }
+
+    private func beginFlight() {
+        activeMode = .focusFlight
+        // Background/inactive transitions are pushed in via handleScenePhaseChange
+        // instead of polled here, so the per-second check always passes.
+        runCountdown { true }
+    }
+
+    private func runCountdown(shouldContinue: @escaping () -> Bool) {
         var secondsLeft = plannedMinutes * 60
         secondsSinceLastAnchor = 0
         phase = .running(secondsLeft: secondsLeft)
@@ -117,7 +182,7 @@ final class FocusEngine: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
 
-                guard self.motionManager.facing == .faceDown else {
+                guard shouldContinue() else {
                     timer.invalidate()
                     self.forfeit(reason: "Phone was picked up before the session ended.")
                     return
@@ -141,6 +206,25 @@ final class FocusEngine: ObservableObject {
         }
     }
 
+    private func beginCooldown() {
+        var secondsLeft = cooldownSeconds
+        phase = .cooldown(secondsLeft: secondsLeft)
+
+        cooldownTimer?.invalidate()
+        cooldownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
+            Task { @MainActor in
+                guard let self else { return }
+                secondsLeft -= 1
+                if secondsLeft <= 0 {
+                    timer.invalidate()
+                    self.reset()
+                    return
+                }
+                self.phase = .cooldown(secondsLeft: secondsLeft)
+            }
+        }
+    }
+
     private func forfeit(reason: String) {
         armTimer?.invalidate()
         runTimer?.invalidate()
@@ -151,6 +235,7 @@ final class FocusEngine: ObservableObject {
         activeSession?.endedAt = .now
         try? modelContext?.save()
 
+        lastFailureReason = reason
         HapticsManager.forfeit()
         phase = .forfeited
     }
@@ -164,6 +249,6 @@ final class FocusEngine: ObservableObject {
         try? modelContext?.save()
 
         HapticsManager.success()
-        phase = .completed
+        phase = .audit
     }
 }
