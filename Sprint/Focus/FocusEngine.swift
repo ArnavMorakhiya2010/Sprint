@@ -36,6 +36,9 @@ final class FocusEngine: ObservableObject {
     @Published private(set) var plannedMinutes: Int = 25
     @Published private(set) var activeMode: SessionMode = .pomodoro
     @Published private(set) var lastFailureReason = ""
+    /// Total length of the session currently running, in seconds. FocusFlight's map view
+    /// uses this alongside `secondsLeft` to compute how far along the route the plane is.
+    @Published private(set) var activeDurationSeconds: Int = 0
 
     @Published var selectedMode: SessionMode = .pomodoro
     @Published var departure: Destination?
@@ -82,10 +85,18 @@ final class FocusEngine: ObservableObject {
         return departure.id != arrival.id
     }
 
+    /// FocusFlight's duration is never set by the user — it's the real great-circle flight
+    /// time between the chosen cities.
+    var flightDurationMinutes: Int? {
+        guard let departure, let arrival else { return nil }
+        return FlightCalculator.durationMinutes(from: departure, to: arrival)
+    }
+
     func start() {
         guard case .configuring = phase, canStart, let modelContext else { return }
 
-        let session = FocusSession(mode: selectedMode, plannedDurationSeconds: plannedMinutes * 60, subject: activeSubject)
+        let durationMinutes = selectedMode == .focusFlight ? (flightDurationMinutes ?? minMinutes) : plannedMinutes
+        let session = FocusSession(mode: selectedMode, plannedDurationSeconds: durationMinutes * 60, subject: activeSubject)
         if selectedMode == .focusFlight {
             session.departureName = departure?.name
             session.arrivalName = arrival?.name
@@ -98,7 +109,7 @@ final class FocusEngine: ObservableObject {
             motionManager.startMonitoring()
             beginArmingCountdown()
         case .focusFlight:
-            beginFlight()
+            beginFlight(totalMinutes: durationMinutes)
         }
     }
 
@@ -162,18 +173,19 @@ final class FocusEngine: ObservableObject {
 
     private func beginRunning() {
         activeMode = .pomodoro
-        runCountdown { [weak self] in self?.motionManager.isLeaning ?? false }
+        runCountdown(totalMinutes: plannedMinutes) { [weak self] in self?.motionManager.isLeaning ?? false }
     }
 
-    private func beginFlight() {
+    private func beginFlight(totalMinutes: Int) {
         activeMode = .focusFlight
         // Background/inactive transitions are pushed in via handleScenePhaseChange
         // instead of polled here, so the per-second check always passes.
-        runCountdown { true }
+        runCountdown(totalMinutes: totalMinutes) { true }
     }
 
-    private func runCountdown(shouldContinue: @escaping () -> Bool) {
-        var secondsLeft = plannedMinutes * 60
+    private func runCountdown(totalMinutes: Int, shouldContinue: @escaping () -> Bool) {
+        var secondsLeft = totalMinutes * 60
+        activeDurationSeconds = secondsLeft
         secondsSinceLastAnchor = 0
         phase = .running(secondsLeft: secondsLeft)
 

@@ -22,7 +22,7 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack {
-            Color.theme.skyBlue.ignoresSafeArea()
+            Color.theme.pearl.ignoresSafeArea()
 
             VStack(spacing: 32) {
                 progressDots
@@ -52,7 +52,7 @@ struct OnboardingView: View {
         HStack(spacing: 8) {
             ForEach(0..<totalSteps, id: \.self) { index in
                 Capsule()
-                    .fill(index == step ? Color.theme.teal : Color.theme.beige)
+                    .fill(index == step ? Color.theme.taupe : Color.theme.khaki)
                     .frame(width: index == step ? 24 : 8, height: 8)
             }
         }
@@ -63,13 +63,13 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("What should we call you?")
                 .font(.theme.header(26))
-                .foregroundStyle(Color.theme.navy)
+                .foregroundStyle(Color.theme.leather)
 
             TextField("Your name", text: $nameInput)
                 .font(.theme.body(18))
                 .padding(16)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Color.theme.beige))
-                .foregroundStyle(Color.theme.navy)
+                .background(RoundedRectangle(cornerRadius: 14).fill(Color.theme.khaki))
+                .foregroundStyle(Color.theme.leather)
                 .offset(x: shakeName ? 10 : 0)
         }
     }
@@ -78,14 +78,14 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("How old are you?")
                 .font(.theme.header(26))
-                .foregroundStyle(Color.theme.navy)
+                .foregroundStyle(Color.theme.leather)
 
             TextField("Age", text: $ageInput)
                 .keyboardType(.numberPad)
                 .font(.theme.body(18))
                 .padding(16)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Color.theme.beige))
-                .foregroundStyle(Color.theme.navy)
+                .background(RoundedRectangle(cornerRadius: 14).fill(Color.theme.khaki))
+                .foregroundStyle(Color.theme.leather)
                 .offset(x: shakeAge ? 10 : 0)
         }
     }
@@ -94,19 +94,19 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("When's lights out?")
                 .font(.theme.header(26))
-                .foregroundStyle(Color.theme.navy)
+                .foregroundStyle(Color.theme.leather)
 
             Text("Your Sleep Lockout Time sets how many hours you have to work with each day.")
                 .font(.theme.body(15))
-                .foregroundStyle(Color.theme.navy.opacity(0.65))
+                .foregroundStyle(Color.theme.leather.opacity(0.65))
 
             DatePicker("", selection: $bedtime, displayedComponents: .hourAndMinute)
                 .labelsHidden()
                 .datePickerStyle(.wheel)
-                .tint(Color.theme.teal)
+                .tint(Color.theme.taupe)
                 .frame(maxWidth: .infinity)
                 .padding(12)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Color.theme.beige))
+                .background(RoundedRectangle(cornerRadius: 14).fill(Color.theme.khaki))
         }
     }
 
@@ -117,7 +117,7 @@ struct OnboardingView: View {
                 .foregroundStyle(Color.theme.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(RoundedRectangle(cornerRadius: 16).fill(Color.theme.navy))
+                .background(RoundedRectangle(cornerRadius: 16).fill(Color.theme.leather))
         }
     }
 

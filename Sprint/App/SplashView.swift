@@ -11,7 +11,7 @@ struct SplashView: View {
 
     var body: some View {
         ZStack {
-            Color.theme.navy.ignoresSafeArea()
+            Color.theme.leather.ignoresSafeArea()
 
             VStack(spacing: 14) {
                 Text("SPRINT")
@@ -22,7 +22,7 @@ struct SplashView: View {
                     .opacity(wordmarkOpacity)
 
                 Rectangle()
-                    .fill(Color.theme.teal)
+                    .fill(Color.theme.taupe)
                     .frame(width: underlineWidth, height: 4)
                     .clipShape(Capsule())
             }

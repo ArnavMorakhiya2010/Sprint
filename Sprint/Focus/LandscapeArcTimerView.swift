@@ -12,7 +12,7 @@ struct LandscapeArcTimerView: View {
 
     var body: some View {
         ZStack {
-            Color.theme.navy
+            Color.theme.leather
 
             switch engine.phase {
             case .configuring:
@@ -47,35 +47,39 @@ struct LandscapeArcTimerView: View {
             let usableHeight = geo.size.height - geo.safeAreaInsets.top - geo.safeAreaInsets.bottom
 
             ZStack {
-                ArcDial(
-                    minutes: engine.plannedMinutes,
-                    minMinutes: engine.minMinutes,
-                    maxMinutes: engine.maxMinutes,
-                    onChange: engine.setPlannedMinutes
-                )
-                .frame(width: usableWidth, height: usableHeight)
+                // Only relevant to Pomodoro — FocusFlight's duration isn't user-set, so
+                // there's nothing for the dial to do in that mode.
+                if engine.selectedMode == .pomodoro {
+                    ArcDial(
+                        minutes: engine.plannedMinutes,
+                        minMinutes: engine.minMinutes,
+                        maxMinutes: engine.maxMinutes,
+                        onChange: engine.setPlannedMinutes
+                    )
+                    .frame(width: usableWidth, height: usableHeight)
+                }
 
                 VStack(spacing: 16) {
-                    modeToggle
-                        .padding(.top, 8)
-
                     Spacer()
 
                     if engine.selectedMode == .focusFlight {
-                        flightPickers
+                        flightBoardingPass
                     } else {
                         Text((subject?.name ?? "GENERAL").uppercased())
                             .font(.theme.caption())
-                            .foregroundStyle(Color.theme.beige)
+                            .foregroundStyle(Color.theme.khaki)
                             .tracking(2)
+
+                        Text(formatted(seconds: engine.plannedMinutes * 60))
+                            .font(.theme.timer(84))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.theme.white)
                     }
 
-                    Text(formatted(seconds: engine.plannedMinutes * 60))
-                        .font(.theme.timer(84))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.theme.white)
-
                     Spacer()
+
+                    // Under the dial/card, not competing with it for attention.
+                    modeToggle
 
                     startButton
                         .padding(.bottom, 8)
@@ -102,23 +106,49 @@ struct LandscapeArcTimerView: View {
         } label: {
             Text(label)
                 .font(.theme.caption())
-                .foregroundStyle(isSelected ? Color.theme.navy : Color.theme.beige)
+                .foregroundStyle(isSelected ? Color.theme.leather : Color.theme.khaki)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(Capsule().fill(isSelected ? Color.theme.teal : Color.clear))
+                .background(Capsule().fill(isSelected ? Color.theme.taupe : Color.clear))
         }
     }
 
-    private var flightPickers: some View {
-        HStack(spacing: 16) {
-            destinationChip(title: "DEPARTURE", selection: $engine.departure)
-            Image(systemName: "airplane")
-                .foregroundStyle(Color.theme.teal)
-            destinationChip(title: "ARRIVAL", selection: $engine.arrival)
+    // MARK: - FocusFlight boarding pass
+
+    private var flightBoardingPass: some View {
+        VStack(spacing: 20) {
+            HStack(spacing: 0) {
+                codeColumn(title: "DEPARTURE", selection: $engine.departure)
+
+                VStack(spacing: 6) {
+                    Image(systemName: "airplane")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.theme.taupe)
+                    Rectangle()
+                        .fill(Color.theme.khaki)
+                        .frame(height: 1)
+                }
+                .frame(width: 56)
+
+                codeColumn(title: "ARRIVAL", selection: $engine.arrival)
+            }
+
+            if let departure = engine.departure, let arrival = engine.arrival {
+                HStack {
+                    flightStat(title: "DURATION", value: FlightCalculator.durationLabel(from: departure, to: arrival), alignment: .leading)
+                    Spacer()
+                    flightStat(title: "DISTANCE", value: "\(Int(FlightCalculator.distanceKm(from: departure, to: arrival))) km", alignment: .trailing)
+                }
+            }
+
+            barcode
         }
+        .padding(24)
+        .background(RoundedRectangle(cornerRadius: 24).fill(Color.theme.white))
+        .frame(maxWidth: 360)
     }
 
-    private func destinationChip(title: String, selection: Binding<Destination?>) -> some View {
+    private func codeColumn(title: String, selection: Binding<Destination?>) -> some View {
         Menu {
             ForEach(Destination.all) { destination in
                 Button("\(destination.flag) \(destination.name)") {
@@ -126,28 +156,58 @@ struct LandscapeArcTimerView: View {
                 }
             }
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 6) {
                 Text(title)
-                    .font(.theme.caption(11))
-                    .foregroundStyle(Color.theme.beige)
-                Text(selection.wrappedValue.map { "\($0.flag) \($0.name)" } ?? "Select")
-                    .font(.theme.header(16))
-                    .foregroundStyle(Color.theme.white)
+                    .font(.theme.caption(10))
+                    .foregroundStyle(Color.theme.leather.opacity(0.5))
+                Text(selection.wrappedValue?.code ?? "---")
+                    .font(.theme.display(32))
+                    .foregroundStyle(Color.theme.leather)
+                Text(selection.wrappedValue?.name ?? "Select")
+                    .font(.theme.body(12))
+                    .foregroundStyle(Color.theme.taupe)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color.theme.white.opacity(0.08)))
+            .frame(maxWidth: .infinity)
         }
+    }
+
+    private func flightStat(title: String, value: String, alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 2) {
+            Text(title)
+                .font(.theme.caption(10))
+                .foregroundStyle(Color.theme.leather.opacity(0.45))
+            Text(value)
+                .font(.theme.header(15))
+                .foregroundStyle(Color.theme.leather)
+        }
+    }
+
+    private var barcode: some View {
+        HStack(spacing: 3) {
+            ForEach(0..<28, id: \.self) { index in
+                Rectangle()
+                    .fill(Color.theme.leather)
+                    .frame(width: barWidth(for: index))
+            }
+        }
+        .frame(height: 32)
+    }
+
+    /// A fixed repeating pattern rather than randomized widths, so the barcode doesn't
+    /// visibly reshuffle every time SwiftUI re-evaluates the view body.
+    private func barWidth(for index: Int) -> CGFloat {
+        let pattern: [CGFloat] = [2, 1, 3, 1, 1, 2, 3, 1, 2, 1]
+        return pattern[index % pattern.count]
     }
 
     private var startButton: some View {
         Button(action: engine.start) {
-            Text(engine.selectedMode == .focusFlight ? "TAKE OFF" : "START")
+            Text(engine.selectedMode == .focusFlight ? "CHECK IN" : "START")
                 .font(.theme.header(18))
-                .foregroundStyle(Color.theme.navy)
+                .foregroundStyle(Color.theme.leather)
                 .padding(.horizontal, 48)
                 .padding(.vertical, 14)
-                .background(Capsule().fill(engine.canStart ? Color.theme.teal : Color.theme.beige.opacity(0.35)))
+                .background(Capsule().fill(engine.canStart ? Color.theme.taupe : Color.theme.khaki.opacity(0.35)))
         }
         .disabled(!engine.canStart)
     }
@@ -158,7 +218,7 @@ struct LandscapeArcTimerView: View {
         VStack(spacing: 20) {
             Image(systemName: "iphone.landscape")
                 .font(.system(size: 40))
-                .foregroundStyle(Color.theme.teal)
+                .foregroundStyle(Color.theme.taupe)
 
             Text("LEAN IT UP")
                 .font(.theme.display(30))
@@ -167,42 +227,52 @@ struct LandscapeArcTimerView: View {
             Text("\(secondsLeft)")
                 .font(.theme.timer(120))
                 .monospacedDigit()
-                .foregroundStyle(Color.theme.teal)
+                .foregroundStyle(Color.theme.taupe)
 
             Text("Prop it against something, landscape, screen visible.\nThe session dies if you don't.")
                 .font(.theme.body())
-                .foregroundStyle(Color.theme.beige)
+                .foregroundStyle(Color.theme.khaki)
                 .multilineTextAlignment(.center)
         }
     }
 
     // MARK: - Running
 
+    @ViewBuilder
     private func runningView(secondsLeft: Int) -> some View {
+        if engine.activeMode == .focusFlight, let departure = engine.departure, let arrival = engine.arrival {
+            let totalSeconds = max(engine.activeDurationSeconds, 1)
+            let progress = min(max(1 - Double(secondsLeft) / Double(totalSeconds), 0), 1)
+            let totalDistance = FlightCalculator.distanceKm(from: departure, to: arrival)
+            let distanceRemaining = Int((totalDistance * (1 - progress)).rounded())
+
+            FlightMapView(
+                departure: departure,
+                arrival: arrival,
+                progress: progress,
+                secondsLeft: secondsLeft,
+                distanceRemainingKm: distanceRemaining
+            )
+        } else {
+            pomodoroRunningView(secondsLeft: secondsLeft)
+        }
+    }
+
+    private func pomodoroRunningView(secondsLeft: Int) -> some View {
         VStack(spacing: 16) {
-            if engine.activeMode == .focusFlight {
-                Text("\(engine.departure?.flag ?? "") \(engine.departure?.name ?? "?") \u{2192} \(engine.arrival?.flag ?? "") \(engine.arrival?.name ?? "?")".uppercased())
-                    .font(.theme.caption())
-                    .foregroundStyle(Color.theme.beige)
-                    .tracking(1)
-            } else {
-                Text((subject?.name ?? "GENERAL").uppercased())
-                    .font(.theme.caption())
-                    .foregroundStyle(Color.theme.beige)
-                    .tracking(2)
-            }
+            Text((subject?.name ?? "GENERAL").uppercased())
+                .font(.theme.caption())
+                .foregroundStyle(Color.theme.khaki)
+                .tracking(2)
 
             Text(formatted(seconds: secondsLeft))
                 .font(.theme.timer(140))
                 .monospacedDigit()
                 .foregroundStyle(Color.theme.white)
 
-            Label(
-                engine.activeMode == .focusFlight ? "In flight \u{00B7} stay in the app" : "Leaning \u{00B7} stay propped up",
-                systemImage: engine.activeMode == .focusFlight ? "airplane" : "lock.fill"
-            )
-            .font(.theme.caption())
-            .foregroundStyle(Color.theme.beige)
+            Label("Leaning \u{00B7} stay propped up", systemImage: "lock.fill")
+                .font(.theme.caption())
+                .foregroundStyle(Color.theme.khaki)
         }
     }
 
@@ -216,7 +286,7 @@ struct LandscapeArcTimerView: View {
 
             Text(engine.lastFailureReason)
                 .font(.theme.body())
-                .foregroundStyle(Color.theme.beige)
+                .foregroundStyle(Color.theme.khaki)
                 .multilineTextAlignment(.center)
 
             Button(action: engine.reset) {
@@ -225,7 +295,7 @@ struct LandscapeArcTimerView: View {
                     .foregroundStyle(Color.theme.white)
                     .padding(.horizontal, 36)
                     .padding(.vertical, 12)
-                    .background(Capsule().stroke(Color.theme.beige, lineWidth: 1.5))
+                    .background(Capsule().stroke(Color.theme.khaki, lineWidth: 1.5))
             }
         }
         .padding(.horizontal, 40)
@@ -237,11 +307,11 @@ struct LandscapeArcTimerView: View {
         VStack(spacing: 24) {
             Text("SESSION COMPLETE")
                 .font(.theme.display(30))
-                .foregroundStyle(Color.theme.teal)
+                .foregroundStyle(Color.theme.taupe)
 
             Text("How was your focus?")
                 .font(.theme.body())
-                .foregroundStyle(Color.theme.beige)
+                .foregroundStyle(Color.theme.khaki)
 
             HStack(spacing: 12) {
                 ratingButton(.good, label: "GOOD")
@@ -258,7 +328,7 @@ struct LandscapeArcTimerView: View {
                 if engine.draftNotes.isEmpty {
                     Text("Notes on this session\u{2026}")
                         .font(.theme.body(14))
-                        .foregroundStyle(Color.theme.beige.opacity(0.6))
+                        .foregroundStyle(Color.theme.khaki.opacity(0.6))
                         .padding(.horizontal, 13)
                         .padding(.vertical, 16)
                         .allowsHitTesting(false)
@@ -270,10 +340,10 @@ struct LandscapeArcTimerView: View {
             Button(action: engine.submitAudit) {
                 Text("SUBMIT")
                     .font(.theme.header(16))
-                    .foregroundStyle(Color.theme.navy)
+                    .foregroundStyle(Color.theme.leather)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Capsule().fill(engine.draftRating == nil ? Color.theme.beige.opacity(0.35) : Color.theme.teal))
+                    .background(Capsule().fill(engine.draftRating == nil ? Color.theme.khaki.opacity(0.35) : Color.theme.taupe))
             }
             .disabled(engine.draftRating == nil)
         }
@@ -287,10 +357,10 @@ struct LandscapeArcTimerView: View {
         } label: {
             Text(label)
                 .font(.theme.caption())
-                .foregroundStyle(isSelected ? Color.theme.navy : Color.theme.beige)
+                .foregroundStyle(isSelected ? Color.theme.leather : Color.theme.khaki)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 10)
-                .background(Capsule().fill(isSelected ? Color.theme.teal : Color.theme.white.opacity(0.1)))
+                .background(Capsule().fill(isSelected ? Color.theme.taupe : Color.theme.white.opacity(0.1)))
         }
     }
 
@@ -300,7 +370,7 @@ struct LandscapeArcTimerView: View {
         VStack(spacing: 16) {
             Image(systemName: "hourglass")
                 .font(.system(size: 36))
-                .foregroundStyle(Color.theme.teal)
+                .foregroundStyle(Color.theme.taupe)
 
             Text("Stand up. Look at something far away.\nSystem cooling down.")
                 .font(.theme.header(22))
@@ -310,7 +380,7 @@ struct LandscapeArcTimerView: View {
             Text(formatted(seconds: secondsLeft))
                 .font(.theme.timer(56))
                 .monospacedDigit()
-                .foregroundStyle(Color.theme.beige)
+                .foregroundStyle(Color.theme.khaki)
         }
         .padding(.horizontal, 40)
     }
