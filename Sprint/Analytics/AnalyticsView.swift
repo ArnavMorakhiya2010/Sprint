@@ -15,10 +15,6 @@ struct AnalyticsView: View {
         sessions.filter { $0.outcomeValue == .success }
     }
 
-    private var failureSessions: [FocusSession] {
-        sessions.filter { $0.outcomeValue == .failure }
-    }
-
     private var totalFocusedMinutes: Int {
         successSessions.reduce(0) { $0 + $1.actualDurationSeconds } / 60
     }
@@ -38,7 +34,7 @@ struct AnalyticsView: View {
 
     var body: some View {
         ZStack {
-            Color.theme.pearl.ignoresSafeArea()
+            Color.theme.cream.ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
@@ -62,15 +58,15 @@ struct AnalyticsView: View {
     private var header: some View {
         HStack {
             Text("Analytics")
-                .font(.theme.display(30))
-                .foregroundStyle(Color.theme.leather)
+                .font(.theme.h1Large())
+                .foregroundStyle(Color.theme.espresso)
             Spacer()
             Button(action: { dismiss() }) {
                 Image(systemName: "xmark")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Color.theme.leather)
+                    .foregroundStyle(Color.theme.espresso)
                     .frame(width: 32, height: 32)
-                    .background(Circle().fill(Color.theme.khaki))
+                    .background(Circle().fill(Color.theme.peach))
             }
         }
         .padding(.top, 8)
@@ -78,19 +74,17 @@ struct AnalyticsView: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Image(systemName: "chart.bar.fill")
-                .font(.system(size: 36))
-                .foregroundStyle(Color.theme.taupe)
+            PomMascotView(pose: .idle, size: 72)
             Text("No sessions yet")
-                .font(.theme.header(20))
-                .foregroundStyle(Color.theme.leather)
+                .font(.theme.h2())
+                .foregroundStyle(Color.theme.espresso)
             Text("Run a Pomodoro or a FocusFlight and your stats will show up here.")
-                .font(.theme.body(14))
-                .foregroundStyle(Color.theme.leather.opacity(0.6))
+                .font(.theme.bodyMedium2())
+                .foregroundStyle(Color.theme.espresso.opacity(0.6))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 60)
+        .padding(.top, 40)
     }
 
     private var statTiles: some View {
@@ -111,25 +105,26 @@ struct AnalyticsView: View {
         VStack(alignment: .leading, spacing: 10) {
             Image(systemName: systemImage)
                 .font(.system(size: 16))
-                .foregroundStyle(Color.theme.taupe)
+                .foregroundStyle(Color.theme.orange)
             Text(value)
-                .font(.theme.header(20))
+                .font(.theme.h2())
                 .monospacedDigit()
-                .foregroundStyle(Color.theme.leather)
+                .foregroundStyle(Color.theme.espresso)
             Text(title)
-                .font(.theme.caption(10))
-                .foregroundStyle(Color.theme.leather.opacity(0.5))
+                .font(.theme.bodySmall())
+                .foregroundStyle(Color.theme.espresso.opacity(0.5))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color.theme.white))
+        .background(RoundedRectangle(cornerRadius: 20).fill(Color.white))
+        .shadow(color: Color.theme.espresso.opacity(0.08), radius: 8, y: 4)
     }
 
     private var subjectSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("By subject")
-                .font(.theme.header(18))
-                .foregroundStyle(Color.theme.leather)
+                .font(.theme.h3())
+                .foregroundStyle(Color.theme.espresso)
 
             let maxMinutes = subjectBreakdown.first?.minutes ?? 1
 
@@ -138,17 +133,17 @@ struct AnalyticsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Text(entry.name)
-                                .font(.theme.body(14))
-                                .foregroundStyle(Color.theme.leather)
+                                .font(.theme.bodyMedium2())
+                                .foregroundStyle(Color.theme.espresso)
                             Spacer()
                             Text("\(entry.minutes)m")
-                                .font(.theme.caption(12))
-                                .foregroundStyle(Color.theme.leather.opacity(0.6))
+                                .font(.theme.bodySmall())
+                                .foregroundStyle(Color.theme.espresso.opacity(0.6))
                         }
 
                         GeometryReader { geo in
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.theme.taupe)
+                                .fill(Color.theme.orange)
                                 .frame(width: geo.size.width * CGFloat(entry.minutes) / CGFloat(maxMinutes), height: 8)
                         }
                         .frame(height: 8)
@@ -156,49 +151,51 @@ struct AnalyticsView: View {
                 }
             }
             .padding(16)
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color.theme.white))
+            .background(RoundedRectangle(cornerRadius: 20).fill(Color.white))
+            .shadow(color: Color.theme.espresso.opacity(0.08), radius: 8, y: 4)
         }
     }
 
     private var recentSessionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Recent sessions")
-                .font(.theme.header(18))
-                .foregroundStyle(Color.theme.leather)
+                .font(.theme.h3())
+                .foregroundStyle(Color.theme.espresso)
 
             VStack(spacing: 1) {
                 ForEach(loggedSessions.prefix(20)) { session in
                     sessionRow(session)
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color.theme.white))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .background(RoundedRectangle(cornerRadius: 20).fill(Color.white))
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .shadow(color: Color.theme.espresso.opacity(0.08), radius: 8, y: 4)
         }
     }
 
     private func sessionRow(_ session: FocusSession) -> some View {
         HStack(spacing: 12) {
             Image(systemName: session.outcomeValue == .success ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .foregroundStyle(session.outcomeValue == .success ? Color.theme.taupe : Color.theme.cacao)
+                .foregroundStyle(session.outcomeValue == .success ? Color.theme.orange : Color.theme.espresso.opacity(0.4))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.subject?.name ?? "General")
-                    .font(.theme.body(14))
-                    .foregroundStyle(Color.theme.leather)
+                    .font(.theme.bodyMedium2())
+                    .foregroundStyle(Color.theme.espresso)
                 Text(session.modeValue.displayName)
-                    .font(.theme.caption(11))
-                    .foregroundStyle(Color.theme.leather.opacity(0.5))
+                    .font(.theme.bodySmall())
+                    .foregroundStyle(Color.theme.espresso.opacity(0.5))
             }
 
             Spacer()
 
             Text("\(session.plannedDurationSeconds / 60)m")
-                .font(.theme.caption(12))
+                .font(.theme.bodySmall())
                 .monospacedDigit()
-                .foregroundStyle(Color.theme.leather.opacity(0.6))
+                .foregroundStyle(Color.theme.espresso.opacity(0.6))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Color.theme.white)
+        .background(Color.white)
     }
 }

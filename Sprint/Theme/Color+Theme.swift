@@ -1,22 +1,22 @@
 import SwiftUI
 
 extension Color {
-    /// Sprint's fixed brand palette. Every screen in the app must be built from these six
-    /// colors — no default Apple system colors (`.blue`, `.gray`, etc).
+    /// Pomly's brand palette. Every screen builds from these — no default Apple system
+    /// colors (`.blue`, `.gray`, etc).
     struct Theme {
-        /// FFFFFF — floating components, cards, text on dark backgrounds.
-        let white = Color(hex: 0xFFFFFF)
-        /// FAF8F5 — master app background.
-        let pearl = Color(hex: 0xFAF8F5)
-        /// DFDACF — secondary surfaces, inactive tracks, metadata.
-        let khaki = Color(hex: 0xDFDACF)
-        /// A3968D — active elements, accents.
-        let taupe = Color(hex: 0xA3968D)
-        /// 4D403A — depth accent: gradients, secondary fills. Low contrast as text on
-        /// `leather`, so it's a surface color, not a text color, on dark screens.
-        let cacao = Color(hex: 0x4D403A)
-        /// 262626 — primary text, dark surfaces (focus screens).
-        let leather = Color(hex: 0x262626)
+        /// F7EBE1 — light-mode background.
+        let cream = Color(hex: 0xF7EBE1)
+        /// F58D4C — primary accent, filled buttons, active/progress states.
+        let orange = Color(hex: 0xF58D4C)
+        /// F4B9B8 — secondary accent, disabled states, inactive tracks.
+        let peach = Color(hex: 0xF4B9B8)
+        /// 34271F — primary text and dark elements in light mode.
+        let espresso = Color(hex: 0x34271F)
+        /// Not one of the four brand swatches — the spec describes the deep-focus
+        /// timer background only as "a deep black/dark charcoal", so this is a reasoned
+        /// near-black extension in the same warm-brown family as `espresso`, used only
+        /// for that one full-screen dark state.
+        let charcoal = Color(hex: 0x1C1410)
     }
 
     static let theme = Theme()

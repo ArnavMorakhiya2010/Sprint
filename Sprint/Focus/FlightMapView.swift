@@ -43,18 +43,18 @@ struct FlightMapView: View {
         ZStack {
             Map(position: $cameraPosition) {
                 MapPolyline(coordinates: [departure.coordinate, arrival.coordinate])
-                    .stroke(Color.theme.taupe, style: StrokeStyle(lineWidth: 3, dash: [1, 8]))
+                    .stroke(Color.theme.orange, style: StrokeStyle(lineWidth: 3, dash: [1, 8]))
 
                 Annotation("", coordinate: planeCoordinate) {
                     Image(systemName: "airplane")
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(Color.theme.leather)
+                        .foregroundStyle(Color.theme.espresso)
                         // The SF Symbol's default heading hasn't been confirmed on-device;
                         // nudge this offset if the icon doesn't line up with the route.
                         .rotationEffect(.degrees(bearingDegrees - 90))
                         .padding(9)
-                        .background(Circle().fill(Color.theme.white))
-                        .shadow(color: Color.theme.leather.opacity(0.4), radius: 5)
+                        .background(Circle().fill(Color.white))
+                        .shadow(color: Color.theme.espresso.opacity(0.4), radius: 5)
                 }
             }
             .allowsHitTesting(false)
@@ -95,12 +95,12 @@ struct FlightMapView: View {
     private func stat(title: String, value: String, alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 4) {
             Text(title)
-                .font(.theme.caption(11))
-                .foregroundStyle(Color.theme.white.opacity(0.7))
+                .font(.theme.bodySmall())
+                .foregroundStyle(Color.white.opacity(0.7))
             Text(value)
-                .font(.theme.display(26))
+                .font(.theme.timerDigits(26))
                 .monospacedDigit()
-                .foregroundStyle(Color.theme.white)
+                .foregroundStyle(Color.white)
         }
     }
 

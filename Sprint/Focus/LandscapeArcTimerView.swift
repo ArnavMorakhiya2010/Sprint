@@ -3,6 +3,11 @@ import SwiftData
 
 /// The massive, landscape-only Focus Engine screen. Appears the moment the device is
 /// rotated horizontal (see `ContentView`) and drives itself entirely off `FocusEngine`.
+///
+/// Background follows the spec's "Dark Mode Focus State": cream/light everywhere except
+/// the two deep-focus phases (`armed`, `running`), which flip to charcoal with orange as
+/// the sole high-contrast accent and the rest of the chrome — including the mascot —
+/// faded away.
 struct LandscapeArcTimerView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -12,7 +17,7 @@ struct LandscapeArcTimerView: View {
 
     var body: some View {
         ZStack {
-            Color.theme.leather
+            backgroundColor
 
             switch engine.phase {
             case .configuring:
@@ -47,10 +52,28 @@ struct LandscapeArcTimerView: View {
         .animation(.easeInOut(duration: 0.3), value: engine.phase)
     }
 
+    private var isDarkPhase: Bool {
+        switch engine.phase {
+        case .armed, .running: return true
+        default: return false
+        }
+    }
+
+    private var backgroundColor: Color {
+        isDarkPhase ? Color.theme.charcoal : Color.theme.cream
+    }
+
+    private var dialFraction: Double {
+        Double(engine.plannedMinutes - engine.minMinutes) / Double(engine.maxMinutes - engine.minMinutes)
+    }
+
+    private func runningFraction(secondsLeft: Int) -> Double {
+        let total = max(engine.activeDurationSeconds, 1)
+        return min(max(1 - Double(secondsLeft) / Double(total), 0), 1)
+    }
+
     // MARK: - Soundscape
 
-    /// Always reachable, in every phase, so nobody has to leave the app to change or kill
-    /// their background sound mid-session.
     private var soundscapeControl: some View {
         Menu {
             ForEach(Soundscape.allCases) { option in
@@ -63,9 +86,9 @@ struct LandscapeArcTimerView: View {
         } label: {
             Image(systemName: soundscape.current.systemImage)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.theme.white)
+                .foregroundStyle(isDarkPhase ? Color.theme.cream : Color.theme.espresso)
                 .frame(width: 38, height: 38)
-                .background(Circle().fill(Color.theme.white.opacity(0.12)))
+                .background(Circle().fill(isDarkPhase ? Color.theme.cream.opacity(0.15) : Color.theme.espresso.opacity(0.08)))
         }
     }
 
@@ -75,44 +98,46 @@ struct LandscapeArcTimerView: View {
         GeometryReader { geo in
             let usableWidth = geo.size.width - geo.safeAreaInsets.leading - geo.safeAreaInsets.trailing
             let usableHeight = geo.size.height - geo.safeAreaInsets.top - geo.safeAreaInsets.bottom
+            let ringSide = min(usableWidth, usableHeight) * 0.6
 
-            ZStack {
-                // Only relevant to Pomodoro — FocusFlight's duration isn't user-set, so
-                // there's nothing for the dial to do in that mode.
+            VStack(spacing: 10) {
+                Spacer()
+
                 if engine.selectedMode == .pomodoro {
-                    ArcDial(
-                        minutes: engine.plannedMinutes,
-                        minMinutes: engine.minMinutes,
-                        maxMinutes: engine.maxMinutes,
-                        onChange: engine.setPlannedMinutes
-                    )
-                    .frame(width: usableWidth, height: usableHeight)
-                }
+                    PomMascotView(pose: .idle, size: ringSide * 0.32)
 
-                VStack(spacing: 16) {
-                    Spacer()
+                    subjectPicker
 
-                    if engine.selectedMode == .focusFlight {
-                        flightBoardingPass
-                    } else {
-                        subjectPicker
+                    ZStack {
+                        PomTimerRing(
+                            fraction: dialFraction,
+                            ringColor: Color.theme.orange,
+                            trackColor: Color.theme.peach,
+                            lineWidth: 14,
+                            onDrag: { location, center in
+                                let fraction = PomTimerRing.resolvedFraction(for: location, center: center)
+                                let minutes = engine.minMinutes + Int((fraction * Double(engine.maxMinutes - engine.minMinutes)).rounded())
+                                engine.setPlannedMinutes(minutes)
+                            }
+                        )
+                        .frame(width: ringSide, height: ringSide)
 
                         Text(formatted(seconds: engine.plannedMinutes * 60))
-                            .font(.theme.timer(84))
+                            .font(.theme.timerDigits(ringSide * 0.19))
                             .monospacedDigit()
-                            .foregroundStyle(Color.theme.white)
+                            .foregroundStyle(Color.theme.espresso)
                     }
-
-                    Spacer()
-
-                    // Under the dial/card, not competing with it for attention.
-                    modeToggle
-
-                    startButton
-                        .padding(.bottom, 8)
+                } else {
+                    flightBoardingPass
                 }
-                .frame(width: usableWidth, height: usableHeight)
+
+                Spacer()
+
+                modeToggle
+                startButton
+                    .padding(.bottom, 8)
             }
+            .frame(width: usableWidth, height: usableHeight)
             .frame(width: geo.size.width, height: geo.size.height)
         }
     }
@@ -126,12 +151,11 @@ struct LandscapeArcTimerView: View {
         } label: {
             HStack(spacing: 6) {
                 Text((engine.selectedSubject?.name ?? "GENERAL").uppercased())
-                    .font(.theme.caption())
-                    .foregroundStyle(Color.theme.khaki)
-                    .tracking(2)
+                    .font(.theme.bodySmall())
+                    .foregroundStyle(Color.theme.espresso.opacity(0.6))
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color.theme.khaki)
+                    .foregroundStyle(Color.theme.espresso.opacity(0.6))
             }
         }
     }
@@ -142,7 +166,7 @@ struct LandscapeArcTimerView: View {
             modeButton(.focusFlight, label: "FOCUSFLIGHT")
         }
         .padding(4)
-        .background(Capsule().fill(Color.theme.white.opacity(0.08)))
+        .background(Capsule().fill(Color.theme.peach.opacity(0.4)))
     }
 
     private func modeButton(_ mode: SessionMode, label: String) -> some View {
@@ -151,11 +175,11 @@ struct LandscapeArcTimerView: View {
             engine.selectedMode = mode
         } label: {
             Text(label)
-                .font(.theme.caption())
-                .foregroundStyle(isSelected ? Color.theme.leather : Color.theme.khaki)
+                .font(.theme.bodySmall())
+                .foregroundStyle(isSelected ? Color.theme.cream : Color.theme.espresso.opacity(0.6))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(Capsule().fill(isSelected ? Color.theme.taupe : Color.clear))
+                .background(Capsule().fill(isSelected ? Color.theme.orange : Color.clear))
         }
     }
 
@@ -169,9 +193,9 @@ struct LandscapeArcTimerView: View {
                 VStack(spacing: 6) {
                     Image(systemName: "airplane")
                         .font(.system(size: 16))
-                        .foregroundStyle(Color.theme.taupe)
+                        .foregroundStyle(Color.theme.orange)
                     Rectangle()
-                        .fill(Color.theme.khaki)
+                        .fill(Color.theme.peach)
                         .frame(height: 1)
                 }
                 .frame(width: 56)
@@ -190,7 +214,8 @@ struct LandscapeArcTimerView: View {
             barcode
         }
         .padding(24)
-        .background(RoundedRectangle(cornerRadius: 24).fill(Color.theme.white))
+        .background(RoundedRectangle(cornerRadius: 24).fill(Color.white))
+        .shadow(color: Color.theme.espresso.opacity(0.1), radius: 12, y: 6)
         .frame(maxWidth: 360)
     }
 
@@ -204,14 +229,14 @@ struct LandscapeArcTimerView: View {
         } label: {
             VStack(spacing: 6) {
                 Text(title)
-                    .font(.theme.caption(10))
-                    .foregroundStyle(Color.theme.leather.opacity(0.5))
+                    .font(.theme.bodySmall())
+                    .foregroundStyle(Color.theme.espresso.opacity(0.5))
                 Text(selection.wrappedValue?.code ?? "---")
-                    .font(.theme.display(32))
-                    .foregroundStyle(Color.theme.leather)
+                    .font(.theme.h1Small())
+                    .foregroundStyle(Color.theme.espresso)
                 Text(selection.wrappedValue?.name ?? "Select")
-                    .font(.theme.body(12))
-                    .foregroundStyle(Color.theme.taupe)
+                    .font(.theme.bodyMedium2())
+                    .foregroundStyle(Color.theme.orange)
             }
             .frame(maxWidth: .infinity)
         }
@@ -220,11 +245,11 @@ struct LandscapeArcTimerView: View {
     private func flightStat(title: String, value: String, alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 2) {
             Text(title)
-                .font(.theme.caption(10))
-                .foregroundStyle(Color.theme.leather.opacity(0.45))
+                .font(.theme.bodySmall())
+                .foregroundStyle(Color.theme.espresso.opacity(0.45))
             Text(value)
-                .font(.theme.header(15))
-                .foregroundStyle(Color.theme.leather)
+                .font(.theme.h3())
+                .foregroundStyle(Color.theme.espresso)
         }
     }
 
@@ -232,7 +257,7 @@ struct LandscapeArcTimerView: View {
         HStack(spacing: 3) {
             ForEach(0..<28, id: \.self) { index in
                 Rectangle()
-                    .fill(Color.theme.leather)
+                    .fill(Color.theme.espresso)
                     .frame(width: barWidth(for: index))
             }
         }
@@ -249,46 +274,45 @@ struct LandscapeArcTimerView: View {
     private var startButton: some View {
         Button(action: engine.start) {
             Text(engine.selectedMode == .focusFlight ? "CHECK IN" : "START")
-                .font(.theme.header(18))
-                .foregroundStyle(Color.theme.leather)
+                .font(.theme.button())
+                .foregroundStyle(Color.theme.cream)
                 .padding(.horizontal, 48)
                 .padding(.vertical, 14)
-                .background(Capsule().fill(engine.canStart ? Color.theme.taupe : Color.theme.khaki.opacity(0.35)))
+                .background(Capsule().fill(engine.canStart ? Color.theme.orange : Color.theme.peach))
         }
         .disabled(!engine.canStart)
     }
 
-    // MARK: - Armed (leaning grace period, Pomodoro only)
+    // MARK: - Armed (leaning grace period, Pomodoro only) — deep-focus dark mode
 
     private func armedView(secondsLeft: Int) -> some View {
         VStack(spacing: 20) {
             Image(systemName: "iphone.landscape")
                 .font(.system(size: 40))
-                .foregroundStyle(Color.theme.taupe)
+                .foregroundStyle(Color.theme.orange)
 
             Text("LEAN IT UP")
-                .font(.theme.display(30))
-                .foregroundStyle(Color.theme.white)
+                .font(.theme.h1Small())
+                .foregroundStyle(Color.theme.cream)
 
             Text("\(secondsLeft)")
-                .font(.theme.timer(120))
+                .font(.theme.timerDigits(96))
                 .monospacedDigit()
-                .foregroundStyle(Color.theme.taupe)
+                .foregroundStyle(Color.theme.orange)
 
             Text("Prop it against something, landscape, screen visible.\nThe session dies if you don't.")
-                .font(.theme.body())
-                .foregroundStyle(Color.theme.khaki)
+                .font(.theme.bodyMedium2())
+                .foregroundStyle(Color.theme.cream.opacity(0.7))
                 .multilineTextAlignment(.center)
         }
     }
 
-    // MARK: - Running
+    // MARK: - Running — deep-focus dark mode
 
     @ViewBuilder
     private func runningView(secondsLeft: Int) -> some View {
         if engine.activeMode == .focusFlight, let departure = engine.departure, let arrival = engine.arrival {
-            let totalSeconds = max(engine.activeDurationSeconds, 1)
-            let progress = min(max(1 - Double(secondsLeft) / Double(totalSeconds), 0), 1)
+            let progress = runningFraction(secondsLeft: secondsLeft)
             let totalDistance = FlightCalculator.distanceKm(from: departure, to: arrival)
             let distanceRemaining = Int((totalDistance * (1 - progress)).rounded())
 
@@ -305,20 +329,39 @@ struct LandscapeArcTimerView: View {
     }
 
     private func pomodoroRunningView(secondsLeft: Int) -> some View {
-        VStack(spacing: 16) {
-            Text((engine.selectedSubject?.name ?? "GENERAL").uppercased())
-                .font(.theme.caption())
-                .foregroundStyle(Color.theme.khaki)
-                .tracking(2)
+        GeometryReader { geo in
+            let usableWidth = geo.size.width - geo.safeAreaInsets.leading - geo.safeAreaInsets.trailing
+            let usableHeight = geo.size.height - geo.safeAreaInsets.top - geo.safeAreaInsets.bottom
+            let ringSide = min(usableWidth, usableHeight) * 0.72
 
-            Text(formatted(seconds: secondsLeft))
-                .font(.theme.timer(140))
-                .monospacedDigit()
-                .foregroundStyle(Color.theme.white)
+            VStack {
+                Spacer()
 
-            Label("Leaning \u{00B7} stay propped up", systemImage: "lock.fill")
-                .font(.theme.caption())
-                .foregroundStyle(Color.theme.khaki)
+                ZStack {
+                    PomTimerRing(
+                        fraction: runningFraction(secondsLeft: secondsLeft),
+                        ringColor: Color.theme.orange,
+                        trackColor: Color.theme.orange.opacity(0.18),
+                        lineWidth: 14
+                    )
+                    .frame(width: ringSide, height: ringSide)
+
+                    VStack(spacing: 8) {
+                        Text(formatted(seconds: secondsLeft))
+                            .font(.theme.timerDigits(ringSide * 0.22))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.theme.orange)
+
+                        Text((engine.selectedSubject?.name ?? "GENERAL").uppercased())
+                            .font(.theme.bodySmall())
+                            .foregroundStyle(Color.theme.orange.opacity(0.7))
+                    }
+                }
+
+                Spacer()
+            }
+            .frame(width: usableWidth, height: usableHeight)
+            .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 
@@ -327,21 +370,21 @@ struct LandscapeArcTimerView: View {
     private var forfeitedView: some View {
         VStack(spacing: 20) {
             Text("SESSION FAILED")
-                .font(.theme.display(36))
-                .foregroundStyle(Color.theme.white)
+                .font(.theme.h1Small())
+                .foregroundStyle(Color.theme.espresso)
 
             Text(engine.lastFailureReason)
-                .font(.theme.body())
-                .foregroundStyle(Color.theme.khaki)
+                .font(.theme.bodyMedium2())
+                .foregroundStyle(Color.theme.espresso.opacity(0.6))
                 .multilineTextAlignment(.center)
 
             Button(action: engine.reset) {
                 Text("BACK TO SETUP")
-                    .font(.theme.header(16))
-                    .foregroundStyle(Color.theme.white)
+                    .font(.theme.button())
+                    .foregroundStyle(Color.theme.cream)
                     .padding(.horizontal, 36)
                     .padding(.vertical, 12)
-                    .background(Capsule().stroke(Color.theme.khaki, lineWidth: 1.5))
+                    .background(Capsule().fill(Color.theme.espresso))
             }
         }
         .padding(.horizontal, 40)
@@ -350,14 +393,16 @@ struct LandscapeArcTimerView: View {
     // MARK: - Audit
 
     private var auditView: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 20) {
+            PomMascotView(pose: .celebrating, size: 76)
+
             Text("SESSION COMPLETE")
-                .font(.theme.display(30))
-                .foregroundStyle(Color.theme.taupe)
+                .font(.theme.h1Small())
+                .foregroundStyle(Color.theme.orange)
 
             Text("How was your focus?")
-                .font(.theme.body())
-                .foregroundStyle(Color.theme.khaki)
+                .font(.theme.bodyMedium2())
+                .foregroundStyle(Color.theme.espresso.opacity(0.6))
 
             HStack(spacing: 12) {
                 ratingButton(.good, label: "GOOD")
@@ -368,28 +413,28 @@ struct LandscapeArcTimerView: View {
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $engine.draftNotes)
                     .scrollContentBackground(.hidden)
-                    .foregroundStyle(Color.theme.white)
+                    .foregroundStyle(Color.theme.espresso)
                     .padding(8)
 
                 if engine.draftNotes.isEmpty {
                     Text("Notes on this session\u{2026}")
-                        .font(.theme.body(14))
-                        .foregroundStyle(Color.theme.khaki.opacity(0.6))
+                        .font(.theme.bodyMedium2())
+                        .foregroundStyle(Color.theme.espresso.opacity(0.4))
                         .padding(.horizontal, 13)
                         .padding(.vertical, 16)
                         .allowsHitTesting(false)
                 }
             }
-            .frame(height: 90)
-            .background(RoundedRectangle(cornerRadius: 14).fill(Color.theme.white.opacity(0.08)))
+            .frame(height: 80)
+            .background(RoundedRectangle(cornerRadius: 18).fill(Color.white))
 
             Button(action: engine.submitAudit) {
                 Text("SUBMIT")
-                    .font(.theme.header(16))
-                    .foregroundStyle(Color.theme.leather)
+                    .font(.theme.button())
+                    .foregroundStyle(Color.theme.cream)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Capsule().fill(engine.draftRating == nil ? Color.theme.khaki.opacity(0.35) : Color.theme.taupe))
+                    .background(Capsule().fill(engine.draftRating == nil ? Color.theme.peach : Color.theme.orange))
             }
             .disabled(engine.draftRating == nil)
         }
@@ -402,45 +447,44 @@ struct LandscapeArcTimerView: View {
             engine.draftRating = rating
         } label: {
             Text(label)
-                .font(.theme.caption())
-                .foregroundStyle(isSelected ? Color.theme.leather : Color.theme.khaki)
+                .font(.theme.bodySmall())
+                .foregroundStyle(isSelected ? Color.theme.cream : Color.theme.espresso.opacity(0.6))
                 .padding(.horizontal, 18)
                 .padding(.vertical, 10)
-                .background(Capsule().fill(isSelected ? Color.theme.taupe : Color.theme.white.opacity(0.1)))
+                .background(Capsule().fill(isSelected ? Color.theme.orange : Color.white))
         }
     }
 
-    // MARK: - Cooldown
+    // MARK: - Cooldown — Pom "replaces the timer" and sleeps
 
     private func cooldownView(secondsLeft: Int) -> some View {
         VStack(spacing: 16) {
-            Image(systemName: "hourglass")
-                .font(.system(size: 36))
-                .foregroundStyle(Color.theme.taupe)
+            PomMascotView(pose: .sleeping, size: 96)
 
             Text("Stand up. Look at something far away.\nSystem cooling down.")
-                .font(.theme.header(22))
-                .foregroundStyle(Color.theme.white)
+                .font(.theme.h3())
+                .foregroundStyle(Color.theme.espresso)
                 .multilineTextAlignment(.center)
 
             Text(formatted(seconds: secondsLeft))
-                .font(.theme.timer(56))
+                .font(.theme.timerDigits(44))
                 .monospacedDigit()
-                .foregroundStyle(Color.theme.khaki)
+                .foregroundStyle(Color.theme.orange)
 
             if !engine.cooldownActivities.isEmpty {
                 VStack(spacing: 10) {
                     ForEach(Array(engine.cooldownActivities.enumerated()), id: \.offset) { _, activity in
                         Label(activity.text, systemImage: activity.systemImage)
-                            .font(.theme.body(14))
-                            .foregroundStyle(Color.theme.white)
+                            .font(.theme.bodyMedium2())
+                            .foregroundStyle(Color.theme.espresso)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(RoundedRectangle(cornerRadius: 12).fill(Color.theme.white.opacity(0.08)))
+                            .background(RoundedRectangle(cornerRadius: 14).fill(Color.white))
+                            .shadow(color: Color.theme.espresso.opacity(0.08), radius: 8, y: 4)
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, 4)
             }
         }
         .padding(.horizontal, 40)

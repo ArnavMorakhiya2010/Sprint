@@ -27,120 +27,146 @@ enum Soundscape: String, CaseIterable, Identifiable {
     }
 }
 
-/// The `AVAudioSourceNode` render callback below runs on a realtime audio thread, not the
-/// main actor — it can't touch `SoundscapePlayer`'s (MainActor-isolated) state directly.
-/// This plain, non-isolated box is the bridge: the main actor writes `value`, the audio
-/// thread reads it. `@unchecked Sendable` because a single `Float` read/write race here is
-/// a stale sample at worst, not a memory-safety issue.
+/// The render callbacks below run on a realtime audio thread, not the main actor — they
+/// can't touch `SoundscapePlayer`'s (MainActor-isolated) state directly. These plain,
+/// non-isolated boxes are the bridge: the main actor writes, the audio thread reads.
+/// `@unchecked Sendable` because a stale sample on a race here is inaudible, not a
+/// memory-safety issue — nothing but the audio thread ever mutates `Phase`.
 private final class VolumeBox: @unchecked Sendable {
     var value: Float = 0.5
 }
 
+private final class Phase: @unchecked Sendable {
+    var lfo: Float = 0
+    var a: Float = 0
+    var b: Float = 0
+    var c: Float = 0
+}
+
 /// A built-in ambient soundscape so a session never requires leaving the app to open a
-/// music player. `.rain` is synthesized on-device (filtered white noise via
-/// `AVAudioEngine`) — no asset needed. `.chillBeats` and `.coffeeShop` play a bundled loop
-/// if one has been added to the app target (see README); without a matching file they
-/// silently no-op rather than crash, since this app ships no audio assets of its own.
+/// separate music player. All three options are procedurally synthesized on-device via
+/// `AVAudioEngine` — no bundled recordings, so nothing here is ever silent because an
+/// asset is missing. None of this is real recorded ambience or an actual rhythmic beat —
+/// "Chill Beats" is a slowly breathing sustained chord, "Coffee Shop" is amplitude-swelled
+/// band-passed noise approximating murmur, "Rain" is low-passed white noise.
 @MainActor
 final class SoundscapePlayer: ObservableObject {
     @Published var current: Soundscape = .off {
         didSet { apply() }
     }
     @Published var volume: Float = 0.5 {
-        didSet {
-            bundledPlayer?.volume = volume
-            volumeBox.value = volume
-        }
+        didSet { volumeBox.value = volume }
     }
 
-    private var bundledPlayer: AVAudioPlayer?
-
-    private let noiseEngine = AVAudioEngine()
-    private var noiseSourceNode: AVAudioSourceNode?
-    private var noiseEQNode: AVAudioUnitEQ?
+    private let engine = AVAudioEngine()
+    private var sourceNode: AVAudioSourceNode?
+    private var eqNode: AVAudioUnitEQ?
     private let volumeBox = VolumeBox()
-    private var isNoiseRunning = false
+    private var isRunning = false
 
     private func apply() {
-        stopBundled()
-        stopNoise()
-
+        stop()
         switch current {
-        case .off:
-            break
-        case .rain:
-            startRainNoise()
-        case .chillBeats:
-            playBundled(named: "chill_beats")
-        case .coffeeShop:
-            playBundled(named: "coffee_shop")
+        case .off: break
+        case .rain: start(recipe: .noise(lowPassHz: 1800))
+        case .coffeeShop: start(recipe: .murmur)
+        case .chillBeats: start(recipe: .pad)
         }
     }
 
-    private func playBundled(named name: String) {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "mp3") else { return }
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-        try? AVAudioSession.sharedInstance().setActive(true)
-        guard let player = try? AVAudioPlayer(contentsOf: url) else { return }
-        player.numberOfLoops = -1
-        player.volume = volume
-        player.play()
-        bundledPlayer = player
+    private enum Recipe {
+        case noise(lowPassHz: Float)
+        case murmur
+        case pad
     }
 
-    private func stopBundled() {
-        bundledPlayer?.stop()
-        bundledPlayer = nil
-    }
-
-    /// Rain, approximated as low-passed white noise — no bundled audio required.
-    private func startRainNoise() {
+    private func start(recipe: Recipe) {
         guard let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1) else { return }
-
-        let eq = AVAudioUnitEQ(numberOfBands: 1)
-        eq.bands[0].filterType = .lowPass
-        eq.bands[0].frequency = 1800
-        eq.bands[0].bypass = false
-
+        let sampleRate: Float = 44100
         let volumeBox = volumeBox
-        let sourceNode = AVAudioSourceNode { [volumeBox] _, _, frameCount, audioBufferList -> OSStatus in
+        let phase = Phase()
+
+        let source = AVAudioSourceNode { _, _, frameCount, audioBufferList -> OSStatus in
             let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
             let level = volumeBox.value
+
             for frame in 0..<Int(frameCount) {
-                let sample = Float.random(in: -1...1) * 0.2 * level
+                let sample: Float
+                switch recipe {
+                case .noise:
+                    sample = Float.random(in: -1...1) * 0.22 * level
+
+                case .murmur:
+                    phase.lfo += 2 * .pi * 0.15 / sampleRate
+                    let swell = 0.55 + 0.45 * sin(phase.lfo)
+                    sample = Float.random(in: -1...1) * 0.22 * level * swell
+
+                case .pad:
+                    // A soft, slowly breathing three-note chord (A3, C#4, E4).
+                    phase.a += 2 * .pi * 220.00 / sampleRate
+                    phase.b += 2 * .pi * 277.18 / sampleRate
+                    phase.c += 2 * .pi * 329.63 / sampleRate
+                    phase.lfo += 2 * .pi * 0.08 / sampleRate
+                    let breathe = 0.5 + 0.5 * sin(phase.lfo)
+                    let chord = (sin(phase.a) + sin(phase.b) + sin(phase.c)) / 3
+                    sample = chord * 0.16 * level * breathe
+                }
+
                 for buffer in buffers {
-                    let data = UnsafeMutableBufferPointer<Float>(buffer)
-                    data[frame] = sample
+                    UnsafeMutableBufferPointer<Float>(buffer)[frame] = sample
                 }
             }
             return noErr
         }
 
-        noiseEngine.attach(sourceNode)
-        noiseEngine.attach(eq)
-        noiseEngine.connect(sourceNode, to: eq, format: format)
-        noiseEngine.connect(eq, to: noiseEngine.mainMixerNode, format: format)
-        noiseSourceNode = sourceNode
-        noiseEQNode = eq
+        engine.attach(source)
+
+        switch recipe {
+        case .noise(let lowPassHz):
+            let eq = AVAudioUnitEQ(numberOfBands: 1)
+            eq.bands[0].filterType = .lowPass
+            eq.bands[0].frequency = lowPassHz
+            eq.bands[0].bypass = false
+            engine.attach(eq)
+            engine.connect(source, to: eq, format: format)
+            engine.connect(eq, to: engine.mainMixerNode, format: format)
+            eqNode = eq
+
+        case .murmur:
+            let eq = AVAudioUnitEQ(numberOfBands: 1)
+            eq.bands[0].filterType = .bandPass
+            eq.bands[0].frequency = 1200
+            eq.bands[0].bandwidth = 2.0
+            eq.bands[0].bypass = false
+            engine.attach(eq)
+            engine.connect(source, to: eq, format: format)
+            engine.connect(eq, to: engine.mainMixerNode, format: format)
+            eqNode = eq
+
+        case .pad:
+            engine.connect(source, to: engine.mainMixerNode, format: format)
+        }
+
+        sourceNode = source
 
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
         try? AVAudioSession.sharedInstance().setActive(true)
 
-        guard (try? noiseEngine.start()) != nil else { return }
-        isNoiseRunning = true
+        guard (try? engine.start()) != nil else { return }
+        isRunning = true
     }
 
-    private func stopNoise() {
-        guard isNoiseRunning else { return }
-        noiseEngine.stop()
-        if let noiseSourceNode {
-            noiseEngine.detach(noiseSourceNode)
+    private func stop() {
+        guard isRunning else { return }
+        engine.stop()
+        if let sourceNode {
+            engine.detach(sourceNode)
         }
-        if let noiseEQNode {
-            noiseEngine.detach(noiseEQNode)
+        if let eqNode {
+            engine.detach(eqNode)
         }
-        noiseSourceNode = nil
-        noiseEQNode = nil
-        isNoiseRunning = false
+        sourceNode = nil
+        eqNode = nil
+        isRunning = false
     }
 }

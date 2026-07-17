@@ -8,30 +8,28 @@ struct HomeStubView: View {
 
     var body: some View {
         ZStack {
-            Color.theme.pearl.ignoresSafeArea()
+            Color.theme.cream.ignoresSafeArea()
 
             VStack(spacing: 16) {
-                Image(systemName: "rotate.right")
-                    .font(.system(size: 44, weight: .bold))
-                    .foregroundStyle(Color.theme.taupe)
+                PomMascotView(pose: .idle, size: 88)
 
                 Text("Rotate to Focus")
-                    .font(.theme.header(24))
-                    .foregroundStyle(Color.theme.leather)
+                    .font(.theme.h1Small())
+                    .foregroundStyle(Color.theme.espresso)
 
                 Text("Turn your phone horizontal to set up a locked-in Pomodoro or FocusFlight session.")
-                    .font(.theme.body(15))
-                    .foregroundStyle(Color.theme.leather.opacity(0.6))
+                    .font(.theme.bodyMedium2())
+                    .foregroundStyle(Color.theme.espresso.opacity(0.6))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
 
                 Button(action: { showingAnalytics = true }) {
                     Label("View Analytics", systemImage: "chart.bar.fill")
-                        .font(.theme.header(14))
-                        .foregroundStyle(Color.theme.white)
+                        .font(.theme.button())
+                        .foregroundStyle(Color.theme.cream)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
-                        .background(Capsule().fill(Color.theme.leather))
+                        .background(Capsule().fill(Color.theme.orange))
                 }
                 .padding(.top, 12)
             }
