@@ -3,6 +3,11 @@ import CoreLocation
 /// A hardcoded FocusFlight destination. Real coordinates, so distance/duration and the
 /// live route map are grounded in something real, even though the roster of cities is
 /// fixed rather than pulled from any routing service.
+///
+/// All 10 are short-haul-distance Western/Central European cities on purpose — every
+/// pairwise route between them is a real short flight, keeping FocusFlight sessions in
+/// the same study-friendly range as Pomodoro (well under 2 hours; `FlightCalculator` also
+/// hard-caps the computed duration as a backstop).
 struct Destination: Identifiable {
     let id = UUID()
     let name: String
@@ -16,15 +21,15 @@ struct Destination: Identifiable {
     }
 
     static let all: [Destination] = [
-        Destination(name: "Tokyo", flag: "🇯🇵", coordinate: CLLocationCoordinate2D(latitude: 35.6762, longitude: 139.6503)),
         Destination(name: "London", flag: "🇬🇧", coordinate: CLLocationCoordinate2D(latitude: 51.5074, longitude: -0.1278)),
-        Destination(name: "New York", flag: "🇺🇸", coordinate: CLLocationCoordinate2D(latitude: 40.7128, longitude: -74.0060)),
         Destination(name: "Paris", flag: "🇫🇷", coordinate: CLLocationCoordinate2D(latitude: 48.8566, longitude: 2.3522)),
-        Destination(name: "Dubai", flag: "🇦🇪", coordinate: CLLocationCoordinate2D(latitude: 25.2048, longitude: 55.2708)),
-        Destination(name: "Singapore", flag: "🇸🇬", coordinate: CLLocationCoordinate2D(latitude: 1.3521, longitude: 103.8198)),
-        Destination(name: "Sydney", flag: "🇦🇺", coordinate: CLLocationCoordinate2D(latitude: -33.8688, longitude: 151.2093)),
-        Destination(name: "Toronto", flag: "🇨🇦", coordinate: CLLocationCoordinate2D(latitude: 43.6532, longitude: -79.3832)),
-        Destination(name: "Hong Kong", flag: "🇭🇰", coordinate: CLLocationCoordinate2D(latitude: 22.3193, longitude: 114.1694)),
-        Destination(name: "Zurich", flag: "🇨🇭", coordinate: CLLocationCoordinate2D(latitude: 47.3769, longitude: 8.5417))
+        Destination(name: "Amsterdam", flag: "🇳🇱", coordinate: CLLocationCoordinate2D(latitude: 52.3676, longitude: 4.9041)),
+        Destination(name: "Brussels", flag: "🇧🇪", coordinate: CLLocationCoordinate2D(latitude: 50.8503, longitude: 4.3517)),
+        Destination(name: "Frankfurt", flag: "🇩🇪", coordinate: CLLocationCoordinate2D(latitude: 50.1109, longitude: 8.6821)),
+        Destination(name: "Zurich", flag: "🇨🇭", coordinate: CLLocationCoordinate2D(latitude: 47.3769, longitude: 8.5417)),
+        Destination(name: "Munich", flag: "🇩🇪", coordinate: CLLocationCoordinate2D(latitude: 48.1351, longitude: 11.5820)),
+        Destination(name: "Milan", flag: "🇮🇹", coordinate: CLLocationCoordinate2D(latitude: 45.4642, longitude: 9.1900)),
+        Destination(name: "Vienna", flag: "🇦🇹", coordinate: CLLocationCoordinate2D(latitude: 48.2082, longitude: 16.3738)),
+        Destination(name: "Copenhagen", flag: "🇩🇰", coordinate: CLLocationCoordinate2D(latitude: 55.6761, longitude: 12.5683))
     ]
 }

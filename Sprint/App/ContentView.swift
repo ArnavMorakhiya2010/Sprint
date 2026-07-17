@@ -6,7 +6,7 @@ struct ContentView: View {
     var body: some View {
         Group {
             if orientationObserver.isLandscape {
-                LandscapeArcTimerView(subject: nil)
+                LandscapeArcTimerView()
             } else {
                 HomeStubView()
             }

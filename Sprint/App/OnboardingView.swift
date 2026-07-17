@@ -1,10 +1,13 @@
 import SwiftUI
+import SwiftData
 
-/// First-run setup. Collects the three inputs the rest of the app is built around — name,
-/// age, and the Sleep Lockout Time (bedtime) that will later cap how much can be scheduled
-/// in a day. `RootView` keeps this on screen until `hasCompletedOnboarding` flips true, so
-/// there's no way into the main app without providing them.
+/// First-run setup. Collects the four inputs the rest of the app is built around — name,
+/// age, active subjects, and the Sleep Lockout Time (bedtime) that will later cap how much
+/// can be scheduled in a day. `RootView` keeps this on screen until `hasCompletedOnboarding`
+/// flips true, so there's no way into the main app without providing them.
 struct OnboardingView: View {
+    @Environment(\.modelContext) private var modelContext
+
     @AppStorage("userName") private var userName: String = ""
     @AppStorage("userAge") private var userAge: Int = 0
     @AppStorage("bedtimeHour") private var bedtimeHour: Int = 22
@@ -14,11 +17,14 @@ struct OnboardingView: View {
     @State private var step = 0
     @State private var nameInput = ""
     @State private var ageInput = ""
+    @State private var subjectInput = ""
+    @State private var subjectNames: [String] = []
     @State private var bedtime = Calendar.current.date(bySettingHour: 22, minute: 0, second: 0, of: .now) ?? .now
     @State private var shakeName = false
     @State private var shakeAge = false
+    @State private var shakeSubject = false
 
-    private let totalSteps = 3
+    private let totalSteps = 4
 
     var body: some View {
         ZStack {
@@ -33,6 +39,7 @@ struct OnboardingView: View {
                     switch step {
                     case 0: nameStep
                     case 1: ageStep
+                    case 2: subjectsStep
                     default: bedtimeStep
                     }
                 }
@@ -90,6 +97,65 @@ struct OnboardingView: View {
         }
     }
 
+    private var subjectsStep: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("What are you studying?")
+                .font(.theme.header(26))
+                .foregroundStyle(Color.theme.leather)
+
+            Text("Add each subject — these become tags across the app, and what you'll pick from when you start a Pomodoro.")
+                .font(.theme.body(14))
+                .foregroundStyle(Color.theme.leather.opacity(0.6))
+
+            HStack(spacing: 10) {
+                TextField("e.g. Math HL", text: $subjectInput)
+                    .font(.theme.body(16))
+                    .padding(14)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.theme.khaki))
+                    .foregroundStyle(Color.theme.leather)
+                    .submitLabel(.done)
+                    .onSubmit(addSubject)
+                    .offset(x: shakeSubject ? 10 : 0)
+
+                Button(action: addSubject) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Color.theme.white)
+                        .frame(width: 48, height: 48)
+                        .background(Circle().fill(Color.theme.leather))
+                }
+            }
+
+            if !subjectNames.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(subjectNames, id: \.self) { name in
+                            subjectChip(name)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+    }
+
+    private func subjectChip(_ name: String) -> some View {
+        HStack(spacing: 6) {
+            Text(name)
+                .font(.theme.body(14))
+                .foregroundStyle(Color.theme.leather)
+            Button {
+                subjectNames.removeAll { $0 == name }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(Color.theme.leather.opacity(0.5))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(Color.theme.taupe.opacity(0.3)))
+    }
+
     private var bedtimeStep: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("When's lights out?")
@@ -121,6 +187,16 @@ struct OnboardingView: View {
         }
     }
 
+    private func addSubject() {
+        let trimmed = subjectInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !subjectNames.contains(trimmed) else {
+            shake($shakeSubject)
+            return
+        }
+        subjectNames.append(trimmed)
+        subjectInput = ""
+    }
+
     private func advance() {
         switch step {
         case 0:
@@ -138,10 +214,20 @@ struct OnboardingView: View {
             }
             userAge = age
             step = 2
+        case 2:
+            guard !subjectNames.isEmpty else {
+                shake($shakeSubject)
+                return
+            }
+            step = 3
         default:
             let components = Calendar.current.dateComponents([.hour, .minute], from: bedtime)
             bedtimeHour = components.hour ?? 22
             bedtimeMinute = components.minute ?? 0
+            for name in subjectNames {
+                modelContext.insert(Subject(name: name))
+            }
+            try? modelContext.save()
             hasCompletedOnboarding = true
         }
     }

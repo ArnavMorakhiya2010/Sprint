@@ -6,9 +6,9 @@ import SwiftData
 struct LandscapeArcTimerView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Query(sort: \Subject.name) private var subjects: [Subject]
     @StateObject private var engine = FocusEngine()
-
-    let subject: Subject?
+    @StateObject private var soundscape = SoundscapePlayer()
 
     var body: some View {
         ZStack {
@@ -29,14 +29,44 @@ struct LandscapeArcTimerView: View {
                 cooldownView(secondsLeft: secondsLeft)
             }
         }
+        .overlay(alignment: .topLeading) {
+            soundscapeControl
+                .padding(.top, 12)
+                .padding(.leading, 16)
+        }
         .ignoresSafeArea()
         .persistentSystemOverlays(.hidden)
-        .onAppear { engine.configure(context: modelContext, subject: subject) }
-        .onDisappear { engine.reset() }
+        .onAppear { engine.configure(context: modelContext) }
+        .onDisappear {
+            engine.reset()
+            soundscape.current = .off
+        }
         .onChange(of: scenePhase) { _, newPhase in
             engine.handleScenePhaseChange(newPhase)
         }
         .animation(.easeInOut(duration: 0.3), value: engine.phase)
+    }
+
+    // MARK: - Soundscape
+
+    /// Always reachable, in every phase, so nobody has to leave the app to change or kill
+    /// their background sound mid-session.
+    private var soundscapeControl: some View {
+        Menu {
+            ForEach(Soundscape.allCases) { option in
+                Button {
+                    soundscape.current = option
+                } label: {
+                    Label(option.label, systemImage: option.systemImage)
+                }
+            }
+        } label: {
+            Image(systemName: soundscape.current.systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.theme.white)
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(Color.theme.white.opacity(0.12)))
+        }
     }
 
     // MARK: - Configuring
@@ -65,10 +95,7 @@ struct LandscapeArcTimerView: View {
                     if engine.selectedMode == .focusFlight {
                         flightBoardingPass
                     } else {
-                        Text((subject?.name ?? "GENERAL").uppercased())
-                            .font(.theme.caption())
-                            .foregroundStyle(Color.theme.khaki)
-                            .tracking(2)
+                        subjectPicker
 
                         Text(formatted(seconds: engine.plannedMinutes * 60))
                             .font(.theme.timer(84))
@@ -87,6 +114,25 @@ struct LandscapeArcTimerView: View {
                 .frame(width: usableWidth, height: usableHeight)
             }
             .frame(width: geo.size.width, height: geo.size.height)
+        }
+    }
+
+    private var subjectPicker: some View {
+        Menu {
+            Button("General") { engine.selectedSubject = nil }
+            ForEach(subjects) { subject in
+                Button(subject.name) { engine.selectedSubject = subject }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text((engine.selectedSubject?.name ?? "GENERAL").uppercased())
+                    .font(.theme.caption())
+                    .foregroundStyle(Color.theme.khaki)
+                    .tracking(2)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color.theme.khaki)
+            }
         }
     }
 
@@ -260,7 +306,7 @@ struct LandscapeArcTimerView: View {
 
     private func pomodoroRunningView(secondsLeft: Int) -> some View {
         VStack(spacing: 16) {
-            Text((subject?.name ?? "GENERAL").uppercased())
+            Text((engine.selectedSubject?.name ?? "GENERAL").uppercased())
                 .font(.theme.caption())
                 .foregroundStyle(Color.theme.khaki)
                 .tracking(2)
@@ -381,6 +427,21 @@ struct LandscapeArcTimerView: View {
                 .font(.theme.timer(56))
                 .monospacedDigit()
                 .foregroundStyle(Color.theme.khaki)
+
+            if !engine.cooldownActivities.isEmpty {
+                VStack(spacing: 10) {
+                    ForEach(Array(engine.cooldownActivities.enumerated()), id: \.offset) { _, activity in
+                        Label(activity.text, systemImage: activity.systemImage)
+                            .font(.theme.body(14))
+                            .foregroundStyle(Color.theme.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 12).fill(Color.theme.white.opacity(0.08)))
+                    }
+                }
+                .padding(.top, 8)
+            }
         }
         .padding(.horizontal, 40)
     }

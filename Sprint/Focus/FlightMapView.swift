@@ -8,22 +8,28 @@ import MapKit
 struct FlightMapView: View {
     let departure: Destination
     let arrival: Destination
-    /// 0 at takeoff, 1 at landing.
+    /// 0 at takeoff, 1 at landing. Ticks once per second from the engine — `animatedProgress`
+    /// is what actually drives the plane, so it glides continuously between those ticks
+    /// instead of hopping in one-second jumps.
     let progress: Double
     let secondsLeft: Int
     let distanceRemainingKm: Int
 
+    @State private var animatedProgress: Double = 0
     @State private var cameraPosition: MapCameraPosition = .automatic
 
-    private var planeCoordinate: CLLocationCoordinate2D {
+    private func coordinate(at fraction: Double) -> CLLocationCoordinate2D {
         CLLocationCoordinate2D(
-            latitude: departure.coordinate.latitude + (arrival.coordinate.latitude - departure.coordinate.latitude) * progress,
-            longitude: departure.coordinate.longitude + (arrival.coordinate.longitude - departure.coordinate.longitude) * progress
+            latitude: departure.coordinate.latitude + (arrival.coordinate.latitude - departure.coordinate.latitude) * fraction,
+            longitude: departure.coordinate.longitude + (arrival.coordinate.longitude - departure.coordinate.longitude) * fraction
         )
     }
 
-    /// Initial bearing from departure to arrival, so the plane icon faces the direction
-    /// of travel rather than sitting at a fixed rotation for the whole flight.
+    private var planeCoordinate: CLLocationCoordinate2D {
+        coordinate(at: animatedProgress)
+    }
+
+    /// Bearing from departure to arrival, so the plane icon faces the direction of travel.
     private var bearingDegrees: Double {
         let lat1 = departure.coordinate.latitude * .pi / 180
         let lat2 = arrival.coordinate.latitude * .pi / 180
@@ -52,8 +58,20 @@ struct FlightMapView: View {
                 }
             }
             .allowsHitTesting(false)
-            .onAppear { recenter(animated: false) }
-            .onChange(of: progress) { _, _ in recenter(animated: true) }
+            .onAppear {
+                animatedProgress = progress
+                cameraPosition = .region(region(for: progress))
+            }
+            .onChange(of: progress) { _, newValue in
+                // Both the annotation (via animatedProgress) and the camera region are
+                // mutated inside the same withAnimation block, so the plane and the map
+                // glide together, continuously, over the full second between engine ticks
+                // rather than snapping to a new spot each time.
+                withAnimation(.linear(duration: 1)) {
+                    animatedProgress = newValue
+                    cameraPosition = .region(region(for: newValue))
+                }
+            }
 
             VStack {
                 Spacer()
@@ -86,14 +104,9 @@ struct FlightMapView: View {
         }
     }
 
-    private func recenter(animated: Bool) {
-        let region = MKCoordinateRegion(center: planeCoordinate, span: MKCoordinateSpan(latitudeDelta: 6, longitudeDelta: 6))
-        if animated {
-            withAnimation(.linear(duration: 1)) {
-                cameraPosition = .region(region)
-            }
-        } else {
-            cameraPosition = .region(region)
-        }
+    private func region(for fraction: Double) -> MKCoordinateRegion {
+        // Tighter than a global-route zoom — these are short-haul routes now, and a close
+        // zoom reads more like a real flight tracker following the plane closely.
+        MKCoordinateRegion(center: coordinate(at: fraction), span: MKCoordinateSpan(latitudeDelta: 1.2, longitudeDelta: 1.2))
     }
 }

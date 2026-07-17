@@ -41,11 +41,14 @@ final class FocusEngine: ObservableObject {
     @Published private(set) var activeDurationSeconds: Int = 0
 
     @Published var selectedMode: SessionMode = .pomodoro
+    @Published var selectedSubject: Subject?
     @Published var departure: Destination?
     @Published var arrival: Destination?
 
     @Published var draftRating: FocusRating?
     @Published var draftNotes: String = ""
+    /// Two random suggestions shown during cooldown instead of a blank countdown.
+    @Published private(set) var cooldownActivities: [BreakActivity] = []
 
     let minMinutes = 5
     let maxMinutes = 120
@@ -61,12 +64,10 @@ final class FocusEngine: ObservableObject {
     private let cooldownSeconds = 300
 
     private var modelContext: ModelContext?
-    private var activeSubject: Subject?
     private var activeSession: FocusSession?
 
-    func configure(context: ModelContext, subject: Subject?) {
+    func configure(context: ModelContext) {
         modelContext = context
-        activeSubject = subject
     }
 
     /// Called continuously as the arc dial is dragged. Only fires a haptic tick when the
@@ -96,7 +97,7 @@ final class FocusEngine: ObservableObject {
         guard case .configuring = phase, canStart, let modelContext else { return }
 
         let durationMinutes = selectedMode == .focusFlight ? (flightDurationMinutes ?? minMinutes) : plannedMinutes
-        let session = FocusSession(mode: selectedMode, plannedDurationSeconds: durationMinutes * 60, subject: activeSubject)
+        let session = FocusSession(mode: selectedMode, plannedDurationSeconds: durationMinutes * 60, subject: selectedSubject)
         if selectedMode == .focusFlight {
             session.departureName = departure?.name
             session.arrivalName = arrival?.name
@@ -220,6 +221,7 @@ final class FocusEngine: ObservableObject {
 
     private func beginCooldown() {
         var secondsLeft = cooldownSeconds
+        cooldownActivities = Array(BreakActivity.allCases.shuffled().prefix(2))
         phase = .cooldown(secondsLeft: secondsLeft)
 
         cooldownTimer?.invalidate()
@@ -261,6 +263,7 @@ final class FocusEngine: ObservableObject {
         try? modelContext?.save()
 
         HapticsManager.success()
+        AlarmPlayer.playCompletionAlarm()
         phase = .audit
     }
 }
