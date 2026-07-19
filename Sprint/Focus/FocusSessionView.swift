@@ -81,19 +81,19 @@ struct FocusSessionView: View {
     // MARK: - Armed (leaning grace period, Pomodoro only) — deep-focus dark mode
 
     private func armedView(secondsLeft: Int) -> some View {
-        VStack(spacing: 20) {
-            Image(systemName: "iphone.landscape")
-                .font(.system(size: 40))
-                .foregroundStyle(Color.theme.orange)
-
+        VStack(spacing: 18) {
             Text("LEAN IT UP")
                 .font(.theme.h1Small())
                 .foregroundStyle(Color.theme.cream)
 
-            Text("\(secondsLeft)")
-                .font(.theme.timerDigits(96))
-                .monospacedDigit()
-                .foregroundStyle(Color.theme.orange)
+            // Same card the running state uses — filling fast over the 5-second grace
+            // window — so the ring/card is visible the instant Start is tapped, not only
+            // after this countdown passes.
+            PomodoroCardView(
+                fraction: 1 - Double(secondsLeft) / 5,
+                timeText: "\(secondsLeft)"
+            )
+            .frame(maxWidth: 280)
 
             Text("Prop it against something, landscape, screen visible.\nThe session dies if you don't.")
                 .font(.theme.bodyMedium2())
@@ -132,8 +132,7 @@ struct FocusSessionView: View {
 
             PomodoroCardView(
                 fraction: runningFraction(secondsLeft: secondsLeft),
-                timeText: formatted(seconds: secondsLeft),
-                showMascot: false
+                timeText: formatted(seconds: secondsLeft)
             )
             .frame(maxWidth: 320)
 

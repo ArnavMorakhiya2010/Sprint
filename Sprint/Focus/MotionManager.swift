@@ -29,6 +29,15 @@ final class MotionManager: ObservableObject {
     private let leaningZRange: ClosedRange<Double> = 0.2...0.85
 
     func startMonitoring() {
+        #if targetEnvironment(simulator)
+        // The Simulator has no CoreMotion hardware at all, so `isDeviceMotionAvailable`
+        // is always false there — without this, the leaning check could never pass and
+        // every session would time out during the 5-second grace period, Simulator only.
+        // Bypassing it here doesn't weaken real enforcement: Simulator builds never ship,
+        // and the `#else` branch (full device-motion check) is what runs on an actual
+        // iPhone regardless of how the app was built.
+        isLeaning = true
+        #else
         guard motionManager.isDeviceMotionAvailable else { return }
         motionManager.deviceMotionUpdateInterval = updateInterval
         motionManager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
@@ -38,6 +47,7 @@ final class MotionManager: ObservableObject {
             let isInclined = self.leaningZRange.contains(abs(g.z))
             self.isLeaning = isLandscape && isInclined
         }
+        #endif
     }
 
     func stopMonitoring() {
