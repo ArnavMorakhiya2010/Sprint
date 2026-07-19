@@ -3,6 +3,8 @@ import SwiftData
 
 /// Add/edit sheet for a `StudyTask`. Passing `editing` switches this into edit mode
 /// (pre-filled fields, a delete option); omitting it creates a new task on save.
+/// `presetList` seeds sensible defaults when adding from inside a specific smart list —
+/// e.g. adding from Someday starts with that toggle already on.
 struct AddTaskView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -15,16 +17,42 @@ struct AddTaskView: View {
     @State private var minutes: Double
     @State private var hasDeadline: Bool
     @State private var deadline: Date
+    @State private var isSomeday: Bool
+    @State private var isFrog: Bool
     @State private var shakeTitle = false
 
-    init(subjects: [Subject], editing: StudyTask? = nil) {
+    init(subjects: [Subject], editing: StudyTask? = nil, presetList: SmartList? = nil) {
         self.subjects = subjects
         self.editing = editing
         _title = State(initialValue: editing?.title ?? "")
         _selectedSubject = State(initialValue: editing?.subject)
         _minutes = State(initialValue: Double(editing?.timeEstimateMinutes ?? 30))
-        _hasDeadline = State(initialValue: editing?.deadline != nil)
-        _deadline = State(initialValue: editing?.deadline ?? .now)
+        _isFrog = State(initialValue: editing?.isFrog ?? false)
+
+        if let editing {
+            _hasDeadline = State(initialValue: editing.deadline != nil)
+            _deadline = State(initialValue: editing.deadline ?? .now)
+            _isSomeday = State(initialValue: editing.isSomeday)
+        } else {
+            switch presetList {
+            case .today:
+                _hasDeadline = State(initialValue: true)
+                _deadline = State(initialValue: .now)
+                _isSomeday = State(initialValue: false)
+            case .upcoming:
+                _hasDeadline = State(initialValue: true)
+                _deadline = State(initialValue: Calendar.current.date(byAdding: .day, value: 3, to: .now) ?? .now)
+                _isSomeday = State(initialValue: false)
+            case .someday:
+                _hasDeadline = State(initialValue: false)
+                _deadline = State(initialValue: .now)
+                _isSomeday = State(initialValue: true)
+            default:
+                _hasDeadline = State(initialValue: false)
+                _deadline = State(initialValue: .now)
+                _isSomeday = State(initialValue: false)
+            }
+        }
     }
 
     var body: some View {
@@ -38,6 +66,8 @@ struct AddTaskView: View {
                         subjectField
                         durationField
                         deadlineField
+                        somedayField
+                        frogField
                         saveButton
                         if editing != nil {
                             deleteButton
@@ -135,6 +165,9 @@ struct AddTaskView: View {
                 Toggle("", isOn: $hasDeadline.animation())
                     .labelsHidden()
                     .tint(Color.theme.orange)
+                    .onChange(of: hasDeadline) { _, newValue in
+                        if newValue { isSomeday = false }
+                    }
             }
             if hasDeadline {
                 DatePicker("", selection: $deadline, displayedComponents: .date)
@@ -145,6 +178,31 @@ struct AddTaskView: View {
                     .background(RoundedRectangle(cornerRadius: 20).fill(Color.white))
             }
         }
+    }
+
+    private var somedayField: some View {
+        HStack {
+            fieldLabel("SOMEDAY")
+            Spacer()
+            Toggle("", isOn: $isSomeday.animation())
+                .labelsHidden()
+                .tint(Color.theme.orange)
+                .onChange(of: isSomeday) { _, newValue in
+                    if newValue { hasDeadline = false }
+                }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private var frogField: some View {
+        HStack {
+            fieldLabel("TODAY'S FROG")
+            Spacer()
+            Toggle("", isOn: $isFrog)
+                .labelsHidden()
+                .tint(Color.theme.orange)
+        }
+        .padding(.horizontal, 4)
     }
 
     private var saveButton: some View {
@@ -183,10 +241,13 @@ struct AddTaskView: View {
             editing.subject = selectedSubject
             editing.timeEstimateMinutes = Int(minutes)
             editing.deadline = hasDeadline ? deadline : nil
+            editing.isSomeday = isSomeday
+            editing.isFrog = isFrog
             editing.lastTouchedAt = .now
         } else {
-            let task = StudyTask(title: trimmed, timeEstimateMinutes: Int(minutes), subject: selectedSubject)
+            let task = StudyTask(title: trimmed, timeEstimateMinutes: Int(minutes), subject: selectedSubject, isFrog: isFrog)
             task.deadline = hasDeadline ? deadline : nil
+            task.isSomeday = isSomeday
             modelContext.insert(task)
         }
         try? modelContext.save()

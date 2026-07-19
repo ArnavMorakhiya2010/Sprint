@@ -34,13 +34,13 @@ enum HapticsManager {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) { impact.impactOccurred(intensity: 0.8) }
     }
 
-    /// Crisp double-tap used to punctuate beats of the splash screen's launch animation.
-    static func launchTick() {
-        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-    }
-
-    /// The final settle beat once the splash animation finishes.
+    /// The splash screen's "impact" beat — a sharp, heavy pulse landing with the
+    /// resolving chord in `LaunchSoundPlayer`.
     static func launchSettle() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.7)
+        let generator = UIImpactFeedbackGenerator(style: .heavy)
+        generator.impactOccurred()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            generator.impactOccurred(intensity: 0.6)
+        }
     }
 }

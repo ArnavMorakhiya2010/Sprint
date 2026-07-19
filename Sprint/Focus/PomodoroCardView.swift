@@ -16,11 +16,15 @@ struct PomodoroCardView: View {
     /// set the Pomodoro duration with the same card that later displays live progress.
     var onDrag: ((_ location: CGPoint, _ center: CGPoint) -> Void)?
 
-    private let ringGradient = AngularGradient(
-        colors: [Color.theme.orange.opacity(0.55), Color.theme.orange],
-        center: .center,
-        startAngle: .degrees(0),
-        endAngle: .degrees(360)
+    // A LinearGradient varies by on-screen position rather than by how much of the path
+    // has been traced, so — unlike an AngularGradient here — it stays visibly a gradient
+    // no matter how small a slice of the ring is currently filled. Two genuinely distinct
+    // colors (not just opacity steps of the same one), matching the reference's
+    // deep-to-bright orange sweep.
+    private let ringGradient = LinearGradient(
+        colors: [Color(hex: 0xC96A2E), Color.theme.orange],
+        startPoint: .bottomLeading,
+        endPoint: .topTrailing
     )
 
     var body: some View {

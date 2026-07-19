@@ -2,9 +2,9 @@ import SwiftUI
 import MapKit
 
 /// The FocusFlight "running" screen: a live map tracking a plane moving in a straight
-/// line from departure to arrival, with the same camera-follows-plane feel as a real
-/// airline flight tracker. Non-interactive by design — nothing here should invite the
-/// user to touch and pan around during a session meant to keep them off their phone.
+/// line from departure to arrival. Fully interactive — the user can pan/zoom/rotate
+/// freely; the camera only moves on its own once, framing the whole route on appear, plus
+/// whenever "recenter" is tapped, rather than fighting a manual pan every second.
 struct FlightMapView: View {
     let departure: Destination
     let arrival: Destination
@@ -46,35 +46,29 @@ struct FlightMapView: View {
                     .stroke(Color.theme.orange, style: StrokeStyle(lineWidth: 3, dash: [1, 8]))
 
                 Annotation("", coordinate: planeCoordinate) {
-                    Image(systemName: "airplane")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(Color.theme.espresso)
-                        // The SF Symbol's default heading hasn't been confirmed on-device;
-                        // nudge this offset if the icon doesn't line up with the route.
-                        .rotationEffect(.degrees(bearingDegrees - 90))
-                        .padding(9)
-                        .background(Circle().fill(Color.white))
-                        .shadow(color: Color.theme.espresso.opacity(0.4), radius: 5)
+                    planeIcon
                 }
             }
-            .allowsHitTesting(false)
             .onAppear {
                 animatedProgress = progress
-                cameraPosition = .region(region(for: progress))
+                cameraPosition = .region(boundingRegion())
             }
             .onChange(of: progress) { _, newValue in
-                // Both the annotation (via animatedProgress) and the camera region are
-                // mutated inside the same withAnimation block, so the plane and the map
-                // glide together, continuously, over the full second between engine ticks
-                // rather than snapping to a new spot each time.
                 withAnimation(.linear(duration: 1)) {
                     animatedProgress = newValue
-                    cameraPosition = .region(region(for: newValue))
                 }
             }
 
             VStack {
+                HStack {
+                    Spacer()
+                    recenterButton
+                }
+                .padding(.top, 16)
+                .padding(.trailing, 16)
+
                 Spacer()
+
                 HStack(alignment: .bottom) {
                     stat(title: "TIME REMAINING", value: timeLabel, alignment: .leading)
                     Spacer()
@@ -82,7 +76,41 @@ struct FlightMapView: View {
                 }
                 .padding(.horizontal, 36)
                 .padding(.bottom, 32)
+                .allowsHitTesting(false)
             }
+        }
+    }
+
+    /// Not a real 3D model — this tool can't generate one. A `rotation3DEffect` tilt plus
+    /// a radial highlight on a flat SF Symbol, to read as more dimensional than a plain
+    /// flat icon.
+    private var planeIcon: some View {
+        Image(systemName: "airplane")
+            .font(.system(size: 22, weight: .bold))
+            .foregroundStyle(
+                LinearGradient(colors: [Color.theme.espresso, Color.theme.espresso.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+            )
+            .rotationEffect(.degrees(bearingDegrees - 90))
+            .rotation3DEffect(.degrees(22), axis: (x: 1, y: 0.3, z: 0), perspective: 0.6)
+            .padding(9)
+            .background(
+                Circle().fill(
+                    RadialGradient(colors: [Color.white, Color.white.opacity(0.82)], center: .topLeading, startRadius: 1, endRadius: 26)
+                )
+            )
+            .shadow(color: Color.theme.espresso.opacity(0.45), radius: 6, y: 3)
+    }
+
+    private var recenterButton: some View {
+        Button {
+            withAnimation { cameraPosition = .region(boundingRegion()) }
+        } label: {
+            Image(systemName: "location.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.theme.espresso)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(Color.white))
+                .shadow(color: Color.theme.espresso.opacity(0.3), radius: 4, y: 2)
         }
     }
 
@@ -104,9 +132,19 @@ struct FlightMapView: View {
         }
     }
 
-    private func region(for fraction: Double) -> MKCoordinateRegion {
-        // Tighter than a global-route zoom — these are short-haul routes now, and a close
-        // zoom reads more like a real flight tracker following the plane closely.
-        MKCoordinateRegion(center: coordinate(at: fraction), span: MKCoordinateSpan(latitudeDelta: 1.2, longitudeDelta: 1.2))
+    /// Frames both cities with padding — computed once on appear (and on "recenter"), not
+    /// forced every tick, so it never fights a manual pan.
+    private func boundingRegion() -> MKCoordinateRegion {
+        let lats = [departure.coordinate.latitude, arrival.coordinate.latitude]
+        let lons = [departure.coordinate.longitude, arrival.coordinate.longitude]
+        let minLat = lats.min() ?? 0, maxLat = lats.max() ?? 0
+        let minLon = lons.min() ?? 0, maxLon = lons.max() ?? 0
+
+        let center = CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2)
+        let span = MKCoordinateSpan(
+            latitudeDelta: max((maxLat - minLat) * 1.6, 1.0),
+            longitudeDelta: max((maxLon - minLon) * 1.6, 1.0)
+        )
+        return MKCoordinateRegion(center: center, span: span)
     }
 }

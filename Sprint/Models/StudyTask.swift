@@ -15,6 +15,8 @@ final class StudyTask {
     var lastTouchedAt: Date
     var deadline: Date?
     var completedAt: Date?
+    /// Explicitly parked for later, Things-3-style — keeps it out of Anytime/Today.
+    var isSomeday: Bool
 
     var subject: Subject?
 
@@ -32,6 +34,7 @@ final class StudyTask {
         self.createdAt = .now
         self.lastTouchedAt = .now
         self.subject = subject
+        self.isSomeday = false
     }
 
     var daysSinceLastTouch: Int {

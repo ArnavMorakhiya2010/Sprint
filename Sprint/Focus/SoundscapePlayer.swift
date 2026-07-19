@@ -102,8 +102,10 @@ final class SoundscapePlayer: ObservableObject {
 
                 case .murmur:
                     phase.lfo += 2 * .pi * 0.15 / sampleRate
-                    let swell = 0.55 + 0.45 * sin(phase.lfo)
-                    sample = Float.random(in: -1...1) * 0.22 * level * swell
+                    // Floor raised well above 0 — the swell should breathe, not
+                    // periodically fade to near-silence.
+                    let swell = 0.7 + 0.3 * sin(phase.lfo)
+                    sample = Float.random(in: -1...1) * 0.3 * level * swell
 
                 case .pad:
                     // A soft, slowly breathing three-note chord (A3, C#4, E4).
@@ -137,11 +139,17 @@ final class SoundscapePlayer: ObservableObject {
             eqNode = eq
 
         case .murmur:
-            let eq = AVAudioUnitEQ(numberOfBands: 1)
-            eq.bands[0].filterType = .bandPass
-            eq.bands[0].frequency = 1200
-            eq.bands[0].bandwidth = 2.0
+            // Two cascaded bands (highPass then lowPass) instead of a single .bandPass
+            // band — this reuses the exact filter type already proven out in the .noise
+            // recipe above rather than leaning on .bandPass's less-certain gain/Q
+            // behavior, while still carving out the same "murmur" mid-range.
+            let eq = AVAudioUnitEQ(numberOfBands: 2)
+            eq.bands[0].filterType = .highPass
+            eq.bands[0].frequency = 300
             eq.bands[0].bypass = false
+            eq.bands[1].filterType = .lowPass
+            eq.bands[1].frequency = 2600
+            eq.bands[1].bypass = false
             engine.attach(eq)
             engine.connect(source, to: eq, format: format)
             engine.connect(eq, to: engine.mainMixerNode, format: format)
