@@ -6,9 +6,12 @@ import SwiftUI
 ///   used in `.configuring` to set the Pomodoro duration, replacing the old semicircle arc.
 /// - **Passive**: `fraction` just reflects elapsed/remaining progress while a session runs;
 ///   nothing here reacts to touch.
-struct PomTimerRing: View {
+///
+/// Generic over `RingStyle` so callers can pass a flat `Color` or a gradient (the
+/// reference's timer card uses a gradient sweep).
+struct PomTimerRing<RingStyle: ShapeStyle>: View {
     let fraction: Double
-    let ringColor: Color
+    let ringStyle: RingStyle
     let trackColor: Color
     var lineWidth: CGFloat = 14
     var onDrag: ((_ location: CGPoint, _ center: CGPoint) -> Void)?
@@ -27,13 +30,13 @@ struct PomTimerRing: View {
 
                 Circle()
                     .trim(from: 0, to: max(0.0001, fraction))
-                    .stroke(ringColor, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .stroke(ringStyle, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .frame(width: radius * 2, height: radius * 2)
                     .position(center)
 
                 if onDrag != nil {
-                    let point = knobPosition(center: center, radius: radius, fraction: fraction)
+                    let point = Self.position(on: center, radius: radius, fraction: fraction)
                     Circle()
                         .fill(Color.theme.cream)
                         .frame(width: lineWidth * 1.7, height: lineWidth * 1.7)
@@ -51,15 +54,15 @@ struct PomTimerRing: View {
         }
     }
 
-    private func knobPosition(center: CGPoint, radius: CGFloat, fraction: Double) -> CGPoint {
+    /// The point on the ring at a given fraction (0 = 12 o'clock, increasing clockwise) —
+    /// exposed so callers can perch something (like Pom) directly on the arc.
+    static func position(on center: CGPoint, radius: CGFloat, fraction: Double) -> CGPoint {
         let angle = (90 - fraction * 360) * Double.pi / 180
         return CGPoint(x: center.x + radius * cos(angle), y: center.y - radius * sin(angle))
     }
-}
 
-extension PomTimerRing {
-    /// Converts a touch location into a 0...1 fraction around the ring, starting at 12
-    /// o'clock and increasing clockwise — the inverse of `knobPosition`.
+    /// Converts a touch location into a 0...1 fraction around the ring — the inverse of
+    /// `position(on:radius:fraction:)`.
     static func resolvedFraction(for location: CGPoint, center: CGPoint) -> Double {
         let dx = location.x - center.x
         let dy = location.y - center.y

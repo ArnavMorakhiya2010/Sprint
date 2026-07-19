@@ -1,19 +1,36 @@
 # Sprint
 
 An uncompromising productivity app for high-achieving IB students. SwiftUI + SwiftData
-+ CoreMotion, built around strict study mechanics rather than generic to-do UI. Visual
-design follows a reference design system (palette, type, component language, and a
-mascot concept called "Pom") — the app itself keeps the Sprint name, since renaming it
-wasn't explicitly requested.
++ CoreMotion. Visual design and app structure follow a reference design system and
+sitemap (palette, type, component language, a mascot concept called "Pom", and a 4-tab
+navigation: Home, To-do, Reports, Settings) — the app itself keeps the Sprint name, since
+renaming it wasn't explicitly requested.
 
 ## Status
 
-**Phase 1 & 2 (in progress):** global theme, SwiftData models, onboarding (name, age,
-subjects, bedtime), splash, and the full Focus Engine — Pomodoro with leaning-enforcement,
-a subject picker, and a full circular timer ring; FocusFlight with a live short-haul map;
-a built-in synthesized ambient soundscape; a completion alarm; break-activity suggestions;
-and a basic analytics dashboard — are implemented. The Task Engine and Accountability
-Calendar are not yet built.
+The full sitemap's top-level structure now exists: a floating pill tab bar over Home
+(Focus), To-do List, Reports, and Settings, plus onboarding and a chatbot. What's real vs.
+stubbed, honestly:
+
+**Fully functional:** onboarding (name/age/subjects/bedtime), the Home tab's timer card
+(drag-to-set circular ring, subject picker, Pomodoro/FocusFlight toggle), the full-screen
+deep-focus session (leaning/landscape enforcement, FocusFlight's live map, audit,
+5-minute cooldown with break suggestions), a synthesized ambient soundscape and
+completion alarm, the To-do List (search, add/edit/delete, sticky-note cards, real
+SwiftData persistence), Reports (time/streak/subject stats), and the functional parts of
+Settings (profile editing, sleep lockout time, default soundscape, reset onboarding).
+
+**Deliberately stubbed, not faked:** the sitemap also calls for things that need
+infrastructure this project doesn't have — a real backend (Google sign-in, password
+change, account deactivation are shown visibly disabled with a "Soon" badge, not wired to
+fake success), and a real AI chatbot (needs an LLM API key and provider choice nobody's
+made; `ChatbotView` ships a keyword-matched local responder instead, and says up front
+that it isn't real AI). Screenshot-triggered social sharing from the reference's UI Flows
+was not built in this pass.
+
+**Not yet built:** literal auth/signup/OTP screens (no backend to authenticate against),
+and Task Decay / Frog lockout / Time-Blindness Timeline from the original spec (the
+To-do List here is the reference's simpler search+sticky-note+CRUD version).
 
 ## Setup
 
@@ -38,9 +55,20 @@ diffed cleanly. To run it:
    real exports to `Assets.xcassets` under those exact names to use them. Without them, a
    simple shape-built placeholder (circle body, glasses, a leaf, stick limbs) is drawn
    instead — a rough stand-in, not a reproduction of the reference illustrations.
-6. Build and run on a physical device — the timer ring drag, the leaning forfeit check,
-   the splash/alarm/haptics, and the ambient audio all require real
-   accelerometer/gyro/speaker hardware and won't behave correctly in the Simulator.
+6. Build and run on a physical device (an iPhone 13 or similar — see "iPhone 13" below)
+   — the timer ring drag, the leaning forfeit check, the splash/alarm/haptics, and the
+   ambient audio all require real accelerometer/gyro/speaker hardware and won't behave
+   correctly in the Simulator.
+
+## iPhone 13
+
+Every screen is built with fluid layout (`GeometryReader`, `ScrollView`, `Spacer`, system
+fonts sized in points) rather than hardcoded frames, so it isn't pinned to one device —
+but it has specifically been reasoned through against the iPhone 13's 390×844pt portrait
+size (curved corners, no Dynamic Island, home-indicator safe area) for the tab bar's
+bottom inset, the timer card's proportions, and the to-do grid's two-column layout at
+that width. Landscape sizing for the deep-focus session reuses the same math that was
+checked against the iPhone 13's 844×390pt landscape size in an earlier pass.
 
 ## Design system
 
@@ -54,90 +82,84 @@ diffed cleanly. To run it:
   `button` — plus one addition outside that scale, `timerDigits(_:)`, for the massive
   session-clock numerals, which are far larger than H1.
 - **Components**: pill-shaped (`Capsule`) buttons and text fields throughout, per spec.
-  Primary buttons are orange-filled with cream text; secondary/disabled are peach.
+  Primary buttons are orange-filled with cream text; secondary/disabled are peach. Task
+  cards are rotated sticky notes in cycling pastel tones.
 - **Pom** (`Focus/PomMascotView.swift`): idle, running, sleeping, and celebrating poses —
   see Setup #5 for how to swap the placeholder for real artwork.
 
-## Architecture so far
+## Architecture
 
+### App shell
+- `App/SprintApp.swift`, `App/RootView.swift` — entry point; splash on every launch, then
+  onboarding (first run) or `MainTabView`.
+- `App/MainTabView.swift` — the floating pill tab bar (Home, To-do, Reports, Settings)
+  from the sitemap, owning the shared `SoundscapePlayer` via `.environmentObject`.
+- `App/HomeTabView.swift` — the Home/Focus tab: session setup (subject, duration via the
+  timer card, Pomodoro/FocusFlight toggle, chatbot entry point) lives here in portrait,
+  reachable from the tab bar — no longer gated behind physically rotating the device.
+  Calling `engine.start()` presents `FocusSessionView` as a full-screen cover.
+- `App/SplashView.swift`, `App/OnboardingView.swift` — launch reveal; first-run
+  name → age → subjects → bedtime flow, with subjects saved as real `Subject` records.
+
+### Focus Engine
+- `Focus/FocusEngine.swift` — the session state machine for both modes:
+  `configuring → armed (Pomodoro only, 5s leaning grace) → running → forfeited` or
+  `→ audit → cooldown`. FocusFlight skips the armed phase and fails via `scenePhase`
+  leaving `.active` instead (no FamilyControls/Screen Time entitlement required). Every
+  attempt is written to SwiftData the moment it starts.
+- `Focus/FocusSessionView.swift` — the full-screen deep-focus cover presented once a
+  session starts: armed/running/forfeited/audit/cooldown only (setup itself lives on the
+  Home tab now). Background flips cream → charcoal for armed/running per the spec's "Dark
+  Mode Focus State," with Pom and secondary chrome hidden there.
+- `Focus/PomTimerRing.swift`, `Focus/PomodoroCardView.swift` — the full circular ring
+  (starts at 12 o'clock, fills clockwise, generic over flat color or gradient) and the
+  dark rounded timer card built on top of it, matching the reference image exactly: Pom
+  perched on the arc, reset/edit icon buttons instead of text buttons.
+- `Focus/MotionManager.swift` — CoreMotion wrapper publishing `isLeaning`.
+- `Focus/Destination.swift`, `Focus/FlightCalculator.swift`, `Focus/FlightMapView.swift` —
+  FocusFlight: 10 real short-haul European cities, a real great-circle
+  distance/duration calculation (capped at 120 minutes), and a live MapKit route with the
+  plane animating continuously via `withAnimation` between engine ticks.
+- `Focus/SoundscapePlayer.swift` — Off/Rain/Coffee Shop/Chill Beats, all synthesized
+  on-device via `AVAudioEngine` (no bundled recordings needed). Fixed a real bug in this
+  pass: the audio source node was missing an explicit `format:`, causing a mismatch
+  against the rest of the connection graph that could silently produce no sound.
+- `Focus/AlarmPlayer.swift` — a synthesized 4-beep completion alarm.
+- `Focus/BreakActivity.swift` — cooldown's rotating micro-activity suggestions.
+- `Focus/HapticsManager.swift` — every haptic pattern the engine fires.
+
+### Other tabs
+- `Todo/TodoListView.swift`, `Todo/TaskCardView.swift`, `Todo/AddTaskView.swift` — the
+  To-do List tab: search, a floating add button, tasks as rotated sticky-note cards
+  (tap to edit, checkbox to complete), backed by the existing `StudyTask` SwiftData model.
+- `Reports/ReportsView.swift` — total time focused, a per-subject bar breakdown, success
+  rate, and recent sessions, from a live `@Query` over `FocusSession`.
+- `Settings/SettingsView.swift` — Profile (name/age/bedtime, real), Default Sound (real —
+  sets `SoundscapePlayer`'s starting state via `MainTabView`), Account rows that need a
+  backend (visibly disabled, "Soon"), About/Privacy static info sheets, and a Reset
+  Onboarding action in place of Logout (there's no session to log out of without a
+  backend).
+- `Chatbot/ChatbotView.swift` — chat UI wired to a local keyword-matched responder, not
+  a real AI — see Status above.
+
+### Models
 - `Models/Subject.swift`, `Models/StudyTask.swift`, `Models/FocusSession.swift` —
   SwiftData models. `StudyTask` (not `Task`) to avoid colliding with Swift's concurrency
-  type. `FocusSession` carries `departureName`/`arrivalName` for FocusFlight runs.
-- `App/SplashView.swift` — Pom + wordmark reveal with synced launch haptics, shown on
-  every app open.
-- `App/OnboardingView.swift` — first-run name → age → subjects → bedtime flow. Subjects
-  are typed in as chips and saved as real `Subject` records via `modelContext`, so they're
-  immediately available to the Pomodoro subject picker. `App/RootView.swift` gates the
-  rest of the app behind `hasCompletedOnboarding`.
-- `Focus/MotionManager.swift` — CoreMotion device-motion wrapper publishing `isLeaning`:
-  true only when the device reads as both landscape and inclined (propped against
-  something), not flat and not held bolt upright.
-- `Focus/Destination.swift` — 10 short-haul Western/Central European cities (all
-  real-world under ~2 hours apart) for FocusFlight, each with a real coordinate and a
-  3-letter boarding-pass-style code.
-- `Focus/FlightCalculator.swift` — turns a Departure/Arrival pair into a real great-circle
-  distance (`CLLocation.distance(from:)`) and a duration at a fixed cruise speed plus
-  ground overhead, hard-capped at 120 minutes. FocusFlight's length is always this
-  computed value, never something the user drags to set.
-- `Focus/BreakActivity.swift` — the cooldown's rotating micro-activity suggestions (drink
-  water, jumping jacks, the 20-20-20 eye rule, etc).
-- `Focus/HapticsManager.swift` — every haptic pattern the Focus Engine fires.
-- `Focus/AlarmPlayer.swift` — a synthesized 4-beep alarm (a precomputed sine-wave
-  `AVAudioPCMBuffer` played via `AVAudioPlayerNode`) fired the instant a session
-  completes, alongside the haptics — zero bundled-asset dependency.
-- `Focus/SoundscapePlayer.swift` — the built-in ambient player, all three options fully
-  synthesized on-device via `AVAudioEngine` (no bundled recordings, so nothing is ever
-  silent because a file is missing): Rain (low-passed white noise), Coffee Shop
-  (band-passed noise with a slow amplitude swell approximating murmur), Chill Beats (a
-  soft, slowly breathing three-note chord — an ambient pad, not an actual rhythmic beat,
-  since a convincing recorded/sequenced track isn't something this tool can generate).
-  Reachable from a small corner control visible in every Focus Engine phase.
-- `Focus/FocusEngine.swift` — the full session state machine for both modes:
-  `configuring → armed (Pomodoro only, 5s leaning grace) → running → forfeited` or
-  `→ audit → cooldown (5 min, with two random BreakActivity suggestions)`. FocusFlight
-  skips the armed phase and fails instead via `scenePhase` leaving `.active` (no
-  FamilyControls/Screen Time entitlement required). `selectedSubject` is live/mutable
-  during `.configuring`, not fixed at init. Every attempt — success or failure — is
-  written to SwiftData the moment it starts.
-- `Focus/PomTimerRing.swift` — the full circular progress ring from the reference (starts
-  at 12 o'clock, fills clockwise), replacing the earlier semicircle arc dial. Doubles as
-  the interactive Pomodoro duration control (drag anywhere on the ring in `.configuring`)
-  and the passive elapsed-progress indicator while running.
-- `Focus/FlightMapView.swift` — FocusFlight's running screen: a live (non-interactive)
-  MapKit route, with the plane's position driven by an `animatedProgress` state updated
-  inside `withAnimation(.linear(duration: 1))` on every engine tick, so it glides
-  continuously between the once-per-second updates instead of hopping.
-- `Focus/LandscapeArcTimerView.swift` — assembles every phase screen. Background flips
-  between cream (light) and charcoal (the spec's "Dark Mode Focus State") depending on
-  phase — charcoal only for `armed`/`running`, with Pom and secondary chrome hidden there
-  to "fade away and prevent distractions," matching spec. Also hosts the Pomodoro subject
-  picker, the boarding-pass-style FocusFlight setup card, the mode toggle (positioned
-  below the ring/card, not overlapping it), and the soundscape control overlay.
-- `Analytics/AnalyticsView.swift` — total time focused, a per-subject bar breakdown, a
-  success-rate tile, and a recent-sessions list, all from a live `@Query` over
-  `FocusSession`. Presented as a sheet from a "View Analytics" button on the Home stub.
-- `App/ContentView.swift`, `App/HomeStubView.swift`, `App/OrientationObserver.swift` —
-  orientation-based routing (portrait → Home stub, landscape → the timer).
+  type.
 
 ## Known gaps / things to verify on-device
 
 - No font or mascot image assets ship in this repo (see Setup #4–5) — both degrade
   gracefully (system font; a shape-built placeholder) rather than breaking, but neither
   matches the reference until you add the real files.
-- No audio assets are needed anymore — all three soundscapes are synthesized. They (plus
-  `AlarmPlayer`) are reasoned-through but literally unheard in this environment (no
-  macOS/Xcode toolchain or speaker here) — confirm the character and levels on a real
-  device.
+- All audio (soundscapes + alarm) is synthesized and reasoned-through, but literally
+  unheard in this environment (no macOS/Xcode toolchain or speaker here) — confirm the
+  character and levels on a real device.
 - The leaning-detection thresholds in `MotionManager` and the `airplane` SF Symbol's
   rotation offset in `FlightMapView` are similarly reasoned but unverified on hardware.
-- `GeometryReader`'s `safeAreaInsets` behavior when nested inside an ancestor
-  `.ignoresSafeArea()` (used to size the full-screen ring) is standard, documented SwiftUI
-  behavior but should be visually confirmed on-device — the Pomodoro setup screen in
-  particular stacks mascot + picker + ring + toggle + button in one landscape column and
-  hasn't been checked for vertical crowding on a real screen.
 - The flight route is a straight linear interpolation between two coordinates, not a
   geodesic — reads fine as a stylized short-haul tracker, isn't literal navigation.
-- "Boot to Home on forfeit" still returns to the timer's own setup screen rather than a
-  real Home destination — iOS doesn't allow an app to force its own interface rotation,
-  and there's no Home screen yet to route to. Connects properly once the Task Engine
-  exists as the actual root.
+- Nothing in this codebase has been compiled — there's no macOS/Xcode toolchain in this
+  environment. Everything was written and re-read carefully for correctness (one real bug
+  already caught and fixed this way: a `View` protocol conflict from a stray `let body:
+  String` property), but building it in Xcode before relying on it is still essential.

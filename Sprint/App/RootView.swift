@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// App entry flow: splash plays on every launch, then either Onboarding (first run) or
-/// the main orientation-routed `ContentView`, depending on `hasCompletedOnboarding`.
+/// the tabbed `MainTabView`, depending on `hasCompletedOnboarding`.
 struct RootView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var showSplash = true
@@ -15,7 +15,7 @@ struct RootView: View {
                 OnboardingView()
                     .transition(.opacity)
             } else {
-                ContentView()
+                MainTabView()
                     .transition(.opacity)
             }
         }

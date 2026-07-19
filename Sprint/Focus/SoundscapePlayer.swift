@@ -86,7 +86,10 @@ final class SoundscapePlayer: ObservableObject {
         let volumeBox = volumeBox
         let phase = Phase()
 
-        let source = AVAudioSourceNode { _, _, frameCount, audioBufferList -> OSStatus in
+        // Explicit format here is the fix for a real bug: without it, AVAudioSourceNode
+        // defaults to a format that doesn't match the mono format used for the rest of
+        // the connection graph below, which can silently produce no audio at all.
+        let source = AVAudioSourceNode(format: format) { _, _, frameCount, audioBufferList -> OSStatus in
             let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
             let level = volumeBox.value
 
@@ -157,7 +160,9 @@ final class SoundscapePlayer: ObservableObject {
     }
 
     private func stop() {
-        guard isRunning else { return }
+        // Not gated on `isRunning` alone: if a previous `engine.start()` threw, nodes were
+        // still attached/connected before that failure, and would otherwise leak here.
+        guard isRunning || sourceNode != nil || eqNode != nil else { return }
         engine.stop()
         if let sourceNode {
             engine.detach(sourceNode)

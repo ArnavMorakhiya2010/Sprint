@@ -1,10 +1,9 @@
 import SwiftUI
 import SwiftData
 
-/// The Sessions-style dashboard: total time focused, a per-subject breakdown, and the
-/// success/failure rate across every logged attempt — Pomodoro and FocusFlight alike.
-struct AnalyticsView: View {
-    @Environment(\.dismiss) private var dismiss
+/// The Reports tab: total time focused, a per-subject breakdown, and the success/failure
+/// rate across every logged attempt — Pomodoro and FocusFlight alike.
+struct ReportsView: View {
     @Query(sort: \FocusSession.startedAt, order: .reverse) private var sessions: [FocusSession]
 
     private var loggedSessions: [FocusSession] {
@@ -38,7 +37,10 @@ struct AnalyticsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    header
+                    Text("Reports")
+                        .font(.theme.h1Large())
+                        .foregroundStyle(Color.theme.espresso)
+                        .padding(.top, 8)
 
                     if loggedSessions.isEmpty {
                         emptyState
@@ -51,25 +53,9 @@ struct AnalyticsView: View {
                     }
                 }
                 .padding(24)
+                .padding(.bottom, 90)
             }
         }
-    }
-
-    private var header: some View {
-        HStack {
-            Text("Analytics")
-                .font(.theme.h1Large())
-                .foregroundStyle(Color.theme.espresso)
-            Spacer()
-            Button(action: { dismiss() }) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Color.theme.espresso)
-                    .frame(width: 32, height: 32)
-                    .background(Circle().fill(Color.theme.peach))
-            }
-        }
-        .padding(.top, 8)
     }
 
     private var emptyState: some View {
